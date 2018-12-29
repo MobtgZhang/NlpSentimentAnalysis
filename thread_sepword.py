@@ -160,6 +160,15 @@ class ModeThread(threading.Thread):
                 fp.write(word + "\n")
         # 释放锁
         self.threadLockMode.release()
+def process_file(task_file,seplength = 200,delay = 3):
+    threadID = getRadomNum()
+    (filepath,threadName) = os.path.split(task_filename)
+    # Deination in ModeThread
+    print("start thread")
+    threadLockFile = threading.Lock()
+    thread = FileThread(threadID,threadName,task_filename,save_filename,seplength,delay,threadLockFile)
+    thread.start()
+    print("exit thread")
 def main(_):
     task_filename = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
     threadID = getRadomNum()
@@ -167,10 +176,6 @@ def main(_):
     save_filename = "/home/asus/AI_Challenger2018/NewCode/vocabfile.csv"
     seplength = 200
     delay = 1
-    # Deination in ModeThread
-    threadLockFile = threading.Lock()
-    thread = FileThread(threadID,threadName,task_filename,save_filename,seplength,delay,threadLockFile)
-    thread.start()
-    print("exit thread")
+    process_file(task_file,seplength,delay)
 if __name__ == "__main__":
     app.run(main)
