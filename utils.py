@@ -62,22 +62,3 @@ def main(_):
         print(line)
 if __name__ == "__main__":
     app.run(main)
-
-
-
-
-
-def process_file(filename,data_type,word_counter,char_counter):
-    print("Generating {} examples...".format(data_type))
-    examples = []
-    eval_examples = {}
-    total = 0
-    with open(filename,"r") as fh:
-        source = pd.read_csv(filename)
-        print(source[0:2]["content"].loc[0])
-def preproc(config):
-    word_counter,char_counter = Counter() , Counter()
-    process_file(config.train_file,"train",word_counter,char_counter)
-    # process_file(config.validation_file,"validation",word_counter,char_counter)
-    # process_file(config.test_file,"test",word_counter,char_counter)
-    print("preproc")
