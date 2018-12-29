@@ -89,9 +89,9 @@ def preproc():
     datasetswords = DataSetWordsLabel(task_file)
     # ChangeToEmbedding
     datasetemdding = DataSetEmddingLabel(datasetswords,word_vecs)
-    np.savez('data.npz',datasetemdding = datasetemdding.Sentences)
-    data = np.load('data.npz')
-    print(data['datasetemdding'])
+    if not os.path.exists(config.Save_datafile):
+        os.mkdir(config.Save_datafile)
+    np.savez(config.train_npz,datasetemdding = datasetemdding.Sentences)
 def main(_):
     preproc()
 if __name__ == "__main__":
