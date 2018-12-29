@@ -9,7 +9,7 @@ from config import config
 from utils import DataSetWordsLabel,DataSetEmddingLabel
 from zhon import hanzi
 import string
-def MakeVocabs(task_file,save_file = "vocab.txt"):
+def MakeVocabs(task_file,vocab_file):
     print("Make vocabulary,Loading File:\n{}".format(task_file))
     Vocabs = set()
     with open(task_file,mode = "r",encoding = "utf-8") as fp:
@@ -30,13 +30,13 @@ def MakeVocabs(task_file,save_file = "vocab.txt"):
             segment.release()
             for word in sent:
                 Vocabs.add(word.strip())
-    with open(save_file,mode = "w",encoding = "utf-8") as fp:
+    with open(vocab_file,mode = "w",encoding = "utf-8") as fp:
         for _,word in enumerate(Vocabs):
             fp.write(word + "\n")
     Length = len(Vocabs)
     del Vocabs
     print("The vocabulary length:{}".format(Length))
-    print("Saved File:\n{}".format(save_file))
+    print("Saved File:\n{}".format(vocab_file))
 # The first step we must make a vocabulary to modify the task
 def LoadVocabs(save_file = "vocab.txt"):
     print("Loading vocabulary:\n{}".format(save_file))
@@ -76,12 +76,12 @@ def GetEmbeddings(Vocabs,embedding_file):
         if word not in word_vecs:
             word_vecs[word] = np.random.uniform(-0.25, 0.25, config.word_dim)
     return word_vecs
-def preproc():
+def preproc(task_file,vocab_file):
+    if not os.path.exists(config.save_datafile):
+        os.mkdir(config.save_datafile)
     # Generate the vocabulary
-    task_file = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
-    save_file = "vocab.txt"
-    if not os.path.exists(save_file):
-        MakeVocabs(task_file,save_file)
+    if not os.path.exists(vocab_file):
+        MakeVocabs(task_file,vocab_file)
     Vocabs = LoadVocabs()
     # load embeddings
     word_vecs = GetEmbeddings(Vocabs,config.wordembedding_file)
@@ -89,10 +89,13 @@ def preproc():
     datasetswords = DataSetWordsLabel(task_file)
     # ChangeToEmbedding
     datasetemdding = DataSetEmddingLabel(datasetswords,word_vecs)
-    if not os.path.exists(config.Save_datafile):
-        os.mkdir(config.Save_datafile)
+    if not os.path.exists(config.save_datafile):
+        os.mkdir(config.save_datafile)
     np.savez(config.train_npz,datasetemdding = datasetemdding.Sentences)
 def main(_):
-    preproc()
+    task_file = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
+    preproc(task_file,config.vocab_file)
+    data = np.load(config.train_npz)
+    print(data['datasetemdding'])
 if __name__ == "__main__":
     app.run(main)
