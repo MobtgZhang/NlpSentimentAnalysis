@@ -1,26 +1,27 @@
 import threading
-import time
-import pandas as pd
 import pyltp as ltp
 from absl import app
-from config import config
+import pandas as pd
+import numpy as np
 import os
+import config
+import time
 from utils import getRadomNum,GetData,LoadVocabs
-class Dictionary:
+class DataSetWords:
     def __init__(self,task_file,save_file,mode,seplength,delay):
         self.task_file = task_file
         self.save_file = save_file
         if not os.path.exists(save_file):
             threadID = getRadomNum()
-            (filepath,threadName) = os.path.split(task_file)
+            (filepath,threadName) = os.path.split(self.task_file)
             # Deination in ModeThread
             print("start thread")
             if mode == "block":
                 threadLockBlock = threading.Lock()
-                thread = BlockThread(theardID,threadName,save_filename,datalist,threadLockBlock)
+                thread = BlockThread(theardID,threadName,self.save_file,datalist,word_vecs,threadLockBlock)
             elif mode == "file":
                 threadLockFile = threading.Lock()
-                thread = FileThread(threadID,threadName,task_file,config.vocab_file,seplength,delay,threadLockFile)
+                thread = FileThread(threadID,threadName,self.task_file,self.save_file,seplength,delay,threadLockFile)
             else:
                 pass
             thread.start()
@@ -28,28 +29,17 @@ class Dictionary:
             thread.join()
             print("exit thread")
         self.vob_length = 0
-        self.Vocabs = None
-    def getVocabs(self):
-        if self.Vocabs is None:
-            Vocabs = LoadVocabs(self.save_file)
-            self.vob_length = len(Vocabs)
-            self.Vocabs = Vocabs
-        return self.Vocabs
+        self.DataSetSentences = None
+        self.DataSetLabels = None
+    def getDataSets(self):
+        if (self.DataSetSentences is None) or (self.DataSetLabels is None):
+            dataVob = np.load(self.save_file)
+            self.DataSetSentences = list(dataVob['sentences'])
+            self.DataSetLabels = dataVob['labels'].tolist()
+            self.vob_length = len(self.DataSetSentences)
+        return self.DataSetSentences,self.DataSetLabels
     def __len__(self):
         return self.vob_length
-
-# Inherit father theard creates a thread that manage the file data
-class FolderThread(threading.Thread):
-    def __init__(self,theardID,theardName,task_file,save_file):
-        threading.Thread.__init__(self)
-        self.theardID = theardID
-        self.theardName = theardName
-        self.task_file = task_file
-        self.save_file = save_file
-    def run(self):
-        pass
-    def create_thread(self,delay):
-        pass
 class FileThread(threading.Thread):
     def __init__(self,threadID,threadName,task_filename,save_filename,seplength,delay,threadlockfile):
         threading.Thread.__init__(self)
@@ -71,20 +61,24 @@ class FileThread(threading.Thread):
         self.threadLockFile.acquire()
         thread_mode_list = self.create_thread(self.task_file,self.seplength,self.delay)
         # 等待所有线程完成
-        for t in thread_mode_list:
-            t.join()
+        for k in range(len(thread_mode_list)):
+            thread_mode_list[k].join()
+            print("End " + thread_mode_list[k].threadID + " Name: "+thread_mode_list[k].threadName+" Time:[%s]"%time.ctime(time.time()))
+        print("End " + self.threadID + " Name: "+self.threadName+" Time:[%s]"%time.ctime(time.time()))
         # Here Insert a thread,that thread synchronization
-        Vocabs = set()
+        processed_sentences = []
+        processed_labels = []
         (filepath,tmp_file) = os.path.split(self.task_file)
         rootfile = os.path.join(config.cache_file,tmp_file.split(".")[0])
         for files in os.listdir(rootfile):
             filename = os.path.join(rootfile,files)
-            vob = LoadVocabs(filename)
-            Vocabs.update(vob)
+            vob = np.load(filename)
+            sent = list(vob['sentences'])
+            label = vob['label_list'].tolist()
+            processed_sentences = processed_sentences + sent
+            processed_labels = processed_labels + label
         # Save cache file
-        with open(self.save_file,mode = "w",encoding = "utf-8") as fp:
-            for word in Vocabs:
-                fp.write(word + "\n")
+        np.savez(self.save_file,sentences = processed_sentences,labels = processed_labels)
         # remove files
         for files in os.listdir(rootfile):
             filename = os.path.join(rootfile,files)
@@ -141,28 +135,38 @@ class BlockThread(threading.Thread):
         # 否则超时后将返回False
         print("Starting " + self.threadID + " Name: "+self.threadName+" Time:[%s]"%time.ctime(time.time()))
         self.threadLockMode.acquire()
-        # MakeVocabs
-        Vocabs = set()
+        # Making Sentences
+        sentences = []
+        indexes = list(self.datalist.columns[2:])
+        label_list = self.datalist[indexes].values.tolist()
+        Length = len(label_list)
         for k in self.datalist.index:
-            sentence = self.datalist.loc[k]['content']
+            sent = self.datalist.loc[k]['content']
             segment = ltp.Segmentor()
             segment.load(os.path.join(config.segment_model_file,"cws.model"))
-            sent = list(segment.segment(sentence))
+            sentences.append(list(segment.segment(sent)))
             segment.release()
-            for word in sent:
-                Vocabs.add(word.strip())
         # Save cache file
-        with open(self.save_file,mode = "w",encoding = "utf-8") as fp:
-            for word in Vocabs:
-                fp.write(word + "\n")
+        np.savez(self.save_file,sentences = sentences,label_list = label_list)
         # 释放锁
         self.threadLockMode.release()
-def process_file(task_file,seplength = 200,delay = 3):
-    threadID = getRadomNum()
-    (filepath,threadName) = os.path.split(task_file)
-    # Deination in ModeThread
-    print("start thread")
-    threadLockFile = threading.Lock()
-    thread = FileThread(threadID,threadName,task_file,config.vocab_file,seplength,delay,threadLockFile)
-    thread.start()
-    print("exit thread")
+def main(_):
+    task_file = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
+    save_file = "/home/asus/AI_Challenger2018/TestData/sent.npz"
+    mode = "file"
+    seplength = 200
+    delay = 2
+    datasetwords = DataSetWords(task_file,save_file,mode,seplength,delay)
+    datasetsentences,datasetlabels = datasetwords.getDataSets()
+    print(datasetlabels)
+def TerTes(_):
+    file_path = "/home/asus/AI_Challenger2018/tmp/testfile/0a17618271084396.csv.npz"
+    raw_data = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
+    outData = pd.read_csv(raw_data)
+    labels = outData[outData.columns[2:-1]]
+    vob = np.load(file_path)
+    sent = list(vob['sentences'])
+    label = len(list(vob['labels'][()]))
+    print(sent)
+if __name__ == "__main__":
+    app.run(main)
