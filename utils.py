@@ -1,4 +1,3 @@
-
 from config import config
 import csv
 from absl import app
@@ -6,6 +5,36 @@ from tqdm import tqdm
 import pyltp as ltp
 import os
 import numpy as np
+import uuid
+import pandas as pd
+# random creates a file for every data file
+def getRadomNum():
+    res = str(uuid.uuid4())
+    res = res.replace('-', '')
+    return res[:16]
+# Open a file for thread
+def GetData(filename,seplength):
+    out = pd.read_csv(filename)
+    Length = len(out)
+    All_Sep = Length//seplength
+    DataList = []
+    for k in range(All_Sep):
+        DataList.append(out.loc[k*seplength:(k+1)*seplength])
+    return DataList
+# LoadVocabs
+def LoadVocabs(save_filename):
+    Vocabs = set()
+    with open(save_filename,mode = "r",encoding = "utf-8") as fpLoad:
+        while True:
+            line = fpLoad.readline()
+            if not line:
+                break
+            line = line.strip()
+            if line =="":
+                continue
+            else:
+                Vocabs.add(line)
+    return Vocabs
 def WordsToEmbedding(wordslist,embedding):
     sent_len = len(wordslist)
     emb_len = config.word_dim
@@ -16,49 +45,3 @@ def WordsToEmbedding(wordslist,embedding):
         else:
             Emb[k] = np.random.uniform(-0.25, 0.25, config.word_dim)
     return Emb
-class DataSetEmddingLabel:
-    def __init__(self,datasetswords,embedding):
-        self.Sentences = []
-        for index in range(len(datasetswords)):
-            wordslist = datasetswords[index]
-            Emb = WordsToEmbedding(wordslist[0],embedding)
-            Label = wordslist[1]
-            self.Sentences.append([Emb,Label])
-        self.DataSetLength = len(self.Sentences)
-    def __getitem__(self,index):
-        return self.Sentences[index]
-    def __len__(self):
-        return self.DataSetLength
-class DataSetWordsLabel:
-    def __init__(self,task_file):
-        self.Sentences = []
-        with open(task_file,mode = "r",encoding = "utf-8") as fp:
-            print("Building DataSetWords ...")
-            DataSet = csv.reader(fp)
-            Headers =  next(DataSet)
-            for line in tqdm(DataSet):
-                # id,sentence,labels
-                id_index = int(line[0])
-                sentence = line[1]
-                labels_index = line[2:-1]
-                labels_index = list(map(int, labels_index[1:-1]))
-                # This is the English and Chinese punctuations
-                # print(string.punctuation)  //!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
-                # print(hanzi.punctuation)   //＂＃＄％＆＇（）＊＋，－／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､　、〃〈〉《》「」『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘’‛“”„‟…‧﹏﹑﹔·！？｡。
-                # segment the sentences
-                segment = ltp.Segmentor()
-                segment.load(os.path.join(config.segment_model_file,"cws.model"))
-                sent = list(segment.segment(sentence))[0:config.text_length]
-                segment.release()
-                self.Sentences.append([sent,labels_index])
-        self.DataSetLength = len(self.Sentences)
-    def __getitem__(self,item):
-        return self.Sentences[item]
-    def __len__(self):
-        return self.DataSetLength
-def main(_):
-    datasets = DataSet("/home/asus/AI_Challenger2018/TestData/testfile.csv")
-    for line in datasets:
-        print(line)
-if __name__ == "__main__":
-    app.run(main)
