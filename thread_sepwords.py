@@ -4,6 +4,7 @@ import pandas as pd
 import pyltp as ltp
 from absl import app
 from config import config
+from tqdm import tqdm
 import os
 from utils import getRadomNum,GetData,LoadVocabs
 class Dictionary:
@@ -12,15 +13,15 @@ class Dictionary:
         self.save_file = save_file
         if not os.path.exists(save_file):
             threadID = getRadomNum()
-            (filepath,threadName) = os.path.split(task_file)
+            (filepath,threadName) = os.path.split(self.task_file)
             # Deination in ModeThread
             print("start thread")
             if mode == "block":
                 threadLockBlock = threading.Lock()
-                thread = BlockThread(theardID,threadName,save_filename,datalist,threadLockBlock)
+                thread = BlockThread(theardID,threadName,self.save_file,datalist,threadLockBlock)
             elif mode == "file":
                 threadLockFile = threading.Lock()
-                thread = FileThread(threadID,threadName,task_file,config.vocab_file,seplength,delay,threadLockFile)
+                thread = FileThread(threadID,threadName,self.task_file,self.save_file,seplength,delay,threadLockFile)
             else:
                 pass
             thread.start()
@@ -71,8 +72,10 @@ class FileThread(threading.Thread):
         self.threadLockFile.acquire()
         thread_mode_list = self.create_thread(self.task_file,self.seplength,self.delay)
         # 等待所有线程完成
-        for t in thread_mode_list:
-            t.join()
+        for k in range(len(thread_mode_list)):
+            thread_mode_list[k].join()
+            print("End " + thread_mode_list[k].threadID + " Name: "+thread_mode_list[k].threadName+" Time:[%s]"%time.ctime(time.time()))
+        print("End " + self.threadID + " Name: "+self.threadName+" Time:[%s]"%time.ctime(time.time()))
         # Here Insert a thread,that thread synchronization
         Vocabs = set()
         (filepath,tmp_file) = os.path.split(self.task_file)
@@ -143,7 +146,7 @@ class BlockThread(threading.Thread):
         self.threadLockMode.acquire()
         # MakeVocabs
         Vocabs = set()
-        for k in self.datalist.index:
+        for k in tqdm(self.datalist.index,self.threadName + " block"):
             sentence = self.datalist.loc[k]['content']
             segment = ltp.Segmentor()
             segment.load(os.path.join(config.segment_model_file,"cws.model"))
@@ -157,22 +160,3 @@ class BlockThread(threading.Thread):
                 fp.write(word + "\n")
         # 释放锁
         self.threadLockMode.release()
-def process_file(task_file,seplength = 200,delay = 3):
-    threadID = getRadomNum()
-    (filepath,threadName) = os.path.split(task_file)
-    # Deination in ModeThread
-    print("start thread")
-    threadLockFile = threading.Lock()
-    thread = FileThread(threadID,threadName,task_file,config.vocab_file,seplength,delay,threadLockFile)
-    thread.start()
-    print("exit thread")
-def main(_):
-    task_filename = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
-    threadID = getRadomNum()
-    threadName = "ModeName"
-    save_filename = "/home/asus/AI_Challenger2018/NewCode/vocabfile.csv"
-    seplength = 200
-    delay = 1
-    process_file(task_file,seplength,delay)
-if __name__ == "__main__":
-    app.run(main)
