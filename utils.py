@@ -1,10 +1,5 @@
 from config import config
-import csv
-from absl import app
 from tqdm import tqdm
-import pyltp as ltp
-import os
-import numpy as np
 import uuid
 import pandas as pd
 # random creates a file for every data file
@@ -14,11 +9,12 @@ def getRadomNum():
     return res[:16]
 # Open a file for thread
 def GetData(filename,seplength):
+    print("Seperate the dataset...")
     out = pd.read_csv(filename)
     Length = len(out)
     All_Sep = Length//seplength
     DataList = []
-    for k in range(All_Sep):
+    for k in tqdm(range(All_Sep)):
         DataList.append(out.loc[k*seplength:(k+1)*seplength])
     return DataList
 # LoadVocabs
@@ -35,13 +31,3 @@ def LoadVocabs(save_filename):
             else:
                 Vocabs.add(line)
     return Vocabs
-def WordsToEmbedding(wordslist,embedding):
-    sent_len = len(wordslist)
-    emb_len = config.word_dim
-    Emb = np.zeros((sent_len,emb_len),dtype = "float32")
-    for k,word in enumerate(wordslist):
-        if word in embedding:
-            Emb[k] = embedding[word.strip()]
-        else:
-            Emb[k] = np.random.uniform(-0.25, 0.25, config.word_dim)
-    return Emb
