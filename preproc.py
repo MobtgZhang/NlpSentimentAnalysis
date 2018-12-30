@@ -39,10 +39,15 @@ def preproc(task_file,save_file,seplength,delay):
         os.mkdir(config.save_datafile)
     # Generate the vocabulary
     dictionary = thsepword.Dictionary(task_file,config.vocab_file,"file",seplength,delay)
-    word_vecs = None
-    if not os.path.exists(save_file):
-        Vocabs = dictionary.getVocabs()
-        # load embeddings
-        word_vecs = GetEmbeddings(Vocabs,config.wordembedding_file)
-        # MakeDataSet
-        datasetswords = thsepsent.DataSetWords(task_file,save_file,word_vecs,"file",seplength,delay)
+    # MakeDataSet
+    datasetswords = thsepsent.DataSetWords(task_file,save_file,"file",seplength,delay)
+def main(_):
+    task_file = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
+    # save_file = "/home/asus/AI_Challenger2018/TestData/sent.npz"
+    seplength = 200
+    delay = 3
+    preproc(task_file,config.train_npz,seplength,delay)
+    data = np.load(config.train_npz)
+    
+if __name__ == "__main__":
+    app.run(main)
