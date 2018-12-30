@@ -166,3 +166,13 @@ def process_file(task_file,seplength = 200,delay = 3):
     thread = FileThread(threadID,threadName,task_file,config.vocab_file,seplength,delay,threadLockFile)
     thread.start()
     print("exit thread")
+def main(_):
+    task_filename = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
+    threadID = getRadomNum()
+    threadName = "ModeName"
+    save_filename = "/home/asus/AI_Challenger2018/NewCode/vocabfile.csv"
+    seplength = 200
+    delay = 1
+    process_file(task_file,seplength,delay)
+if __name__ == "__main__":
+    app.run(main)
