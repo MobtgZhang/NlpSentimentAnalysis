@@ -2,6 +2,7 @@ import threading
 import pyltp as ltp
 from absl import app
 import pandas as pd
+from tqdm import tqdm
 import numpy as np
 import os
 import config
@@ -61,7 +62,7 @@ class FileThread(threading.Thread):
         self.threadLockFile.acquire()
         thread_mode_list = self.create_thread(self.task_file,self.seplength,self.delay)
         # 等待所有线程完成
-        for k in range(len(thread_mode_list)):
+        for k in tqdm(range(len(thread_mode_list))):
             thread_mode_list[k].join()
             print("End " + thread_mode_list[k].threadID + " Name: "+thread_mode_list[k].threadName+" Time:[%s]"%time.ctime(time.time()))
         print("End " + self.threadID + " Name: "+self.threadName+" Time:[%s]"%time.ctime(time.time()))
@@ -140,7 +141,7 @@ class BlockThread(threading.Thread):
         indexes = list(self.datalist.columns[2:])
         label_list = self.datalist[indexes].values.tolist()
         Length = len(label_list)
-        for k in self.datalist.index:
+        for k in tqdm(self.datalist.index,self.threadName + " block"):
             sent = self.datalist.loc[k]['content']
             segment = ltp.Segmentor()
             segment.load(os.path.join(config.segment_model_file,"cws.model"))
@@ -150,23 +151,3 @@ class BlockThread(threading.Thread):
         np.savez(self.save_file,sentences = sentences,label_list = label_list)
         # 释放锁
         self.threadLockMode.release()
-def main(_):
-    task_file = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
-    save_file = "/home/asus/AI_Challenger2018/TestData/sent.npz"
-    mode = "file"
-    seplength = 200
-    delay = 2
-    datasetwords = DataSetWords(task_file,save_file,mode,seplength,delay)
-    datasetsentences,datasetlabels = datasetwords.getDataSets()
-    print(datasetlabels)
-def TerTes(_):
-    file_path = "/home/asus/AI_Challenger2018/tmp/testfile/0a17618271084396.csv.npz"
-    raw_data = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
-    outData = pd.read_csv(raw_data)
-    labels = outData[outData.columns[2:-1]]
-    vob = np.load(file_path)
-    sent = list(vob['sentences'])
-    label = len(list(vob['labels'][()]))
-    print(sent)
-if __name__ == "__main__":
-    app.run(main)
