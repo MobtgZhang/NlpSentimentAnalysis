@@ -1,6 +1,6 @@
-from config import config
 from preproc import preproc
 from absl import app
+from config import config
 def train_entry(config):
     print("train_entry")
 def test_entry(config):
@@ -10,7 +10,14 @@ def main(_):
     if config.mode == "train":
         train_entry(config)
     elif config.mode == "data":
-        preproc(config)
+        seplength = 1000
+        delay = 50
+        # train dataset has 90000 
+        preproc(config.train_file,config.train_npz,config.train_vocab_file,seplength,delay)
+        # validate dataset has 15000 
+        preproc(config.validation_file,config.validation_npz,config.validate_vocab_file,seplength,delay)
+        # test dataset has 15000 
+        preproc(config.test_file,config.test_npz,config.test_vocab_file,seplength,delay)
     elif config.mode == "debug":
         train_entry(config)
     elif config.mode == "test":
