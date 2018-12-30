@@ -117,6 +117,7 @@ def main(_):
         train_loss, test_losses = 0, 0
         train_acc, test_acc = 0, 0
         n, m = 0, 0
+        exit()
         for feature, label in train_iter:
             n += 1
             net.zero_grad()
@@ -145,5 +146,6 @@ def main(_):
         # print('epoch: %d, train loss: %.4f, train acc: %.2f, test loss: %.4f, test acc: %.2f, time: %.2f' %
         #  (epoch, train_loss.data / n, train_acc / n, test_losses.data / m, test_acc / m, runtime))
         print('epoch: %d, train loss: %.4f, train acc: %.2f, time: %.2f' %(epoch, train_loss.data / n, train_acc / n, runtime))
+        exit()
 if __name__ == "__main__":
     app.run(main)
