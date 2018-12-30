@@ -1,5 +1,7 @@
 import os
 import absl.flags as flags
+import torch
+import torch.backends.cudnn as cudnn
 
 # home = os.path.expanduser(".")
 home = "/home/asus"
@@ -39,6 +41,7 @@ flags.DEFINE_string("wordembedding_file", wordembedding_file, "")
 flags.DEFINE_integer("word_dim",300, "Embedding dimension for word")
 flags.DEFINE_integer("char_dim",300, "Embedding dimension for char")
 flags.DEFINE_integer("text_length",1000, "the length of the text")
+flags.DEFINE_integer("labels",20, "the labels of the text")
 
 flags.DEFINE_integer("train_word_sep_size",1000, "the batchsize to seperate raw data for word")
 flags.DEFINE_integer("train_delay",1000, "train raw dataset delay time")
@@ -46,3 +49,7 @@ flags.DEFINE_integer("validation_delay",500, "validation raw dataset delay time"
 flags.DEFINE_integer("test_delay",500, "test raw dataset delay time")
 
 config = flags.FLAGS
+device = "cuda" if torch.cuda.is_available() else "cpu"
+flags.DEFINE_string("device", device, "")
+
+cudnn.enabled = False
