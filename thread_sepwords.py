@@ -1,44 +1,43 @@
 import threading
-import _thread
 import time
 import pandas as pd
 import pyltp as ltp
 from absl import app
 from config import config
-import uuid
 import os
-# Define a function for a thread
-def print_time( threadName, delay):
-    time.sleep(delay)
-    print ("%s: %s" % (threadName, time.ctime(time.time())))
-# random creates a file for every data file
-def getRadomNum():
-    res = str(uuid.uuid4())
-    res = res.replace('-', '')
-    return res[:16]
-# Open a file for thread
-def GetData(filename,seplength):
-    out = pd.read_csv(filename)
-    Length = len(out)
-    All_Sep = Length//seplength
-    DataList = []
-    for k in range(All_Sep):
-        DataList.append(out.loc[k*seplength:(k+1)*seplength])
-    return DataList
-# LoadVocabs
-def LoadVocabs(save_filename):
-    Vocabs = set()
-    with open(save_filename,mode = "r",encoding = "utf-8") as fpLoad:
-        while True:
-            line = fpLoad.readline()
-            if not line:
-                break
-            line = line.strip()
-            if line =="":
-                continue
+from utils import getRadomNum,GetData,LoadVocabs
+class Dictionary:
+    def __init__(self,task_file,save_file,mode,seplength,delay):
+        self.task_file = task_file
+        self.save_file = save_file
+        if not os.path.exists(save_file):
+            threadID = getRadomNum()
+            (filepath,threadName) = os.path.split(task_file)
+            # Deination in ModeThread
+            print("start thread")
+            if mode == "block":
+                threadLockBlock = threading.Lock()
+                thread = BlockThread(theardID,threadName,save_filename,datalist,threadLockBlock)
+            elif mode == "file":
+                threadLockFile = threading.Lock()
+                thread = FileThread(threadID,threadName,task_file,config.vocab_file,seplength,delay,threadLockFile)
             else:
-                Vocabs.add(line)
-    return Vocabs
+                pass
+            thread.start()
+            # Util finish the thread
+            thread.join()
+            print("exit thread")
+        self.vob_length = 0
+        self.Vocabs = None
+    def getVocabs(self):
+        if self.Vocabs is None:
+            Vocabs = LoadVocabs(self.save_file)
+            self.vob_length = len(Vocabs)
+            self.Vocabs = Vocabs
+        return self.Vocabs
+    def __len__(self):
+        return self.vob_length
+
 # Inherit father theard creates a thread that manage the file data
 class FolderThread(threading.Thread):
     def __init__(self,theardID,theardName,task_file,save_file):
@@ -65,7 +64,7 @@ class FileThread(threading.Thread):
     def run(self):
         if not os.path.exists(config.cache_file):
             os.mkdir(config.cache_file)
-        print("Starting " + self.threadID + " Name: "+self.threadName)
+        print("Starting " + self.threadID + " Name: "+self.threadName+" Time:[%s]"%time.ctime(time.time()))
         # 获得锁，成功获得锁定后返回True
         # 可选的timeout参数不填时将一直阻塞直到获得锁定
         # 否则超时后将返回False
@@ -95,8 +94,6 @@ class FileThread(threading.Thread):
         self.threadLockFile.release()
     # Create a data thread for a file 
     def create_thread(self,task_filename,seplength,delay):
-        if not os.path.exists(config.cache_file):
-            os.mkdir(config.cache_file)
         # creates a file for data work
         (filepath,filename) = os.path.split(task_filename)
         filename = os.path.join(config.cache_file,filename.split(".")[0])
@@ -120,9 +117,9 @@ class FileThread(threading.Thread):
             threadName = "file:" + str(thread_count)
             save_filename = fp_namelist[thread_count]
             datalist = outData[thread_count]
-            # Deination in ModeThread
-            threadLockMode = threading.Lock()
-            thread_mode = ModeThread(threadID,threadName,save_filename,datalist,threadLockMode)
+            # Deination in BlockThread
+            threadLockBlock = threading.Lock()
+            thread_mode = BlockThread(threadID,threadName,save_filename,datalist,threadLockBlock)
             # 开启新线程
             time.sleep(delay)
             thread_mode.start()
@@ -130,19 +127,19 @@ class FileThread(threading.Thread):
             thread_mode_list.append(thread_mode)
             thread_count += 1
         return thread_mode_list
-class ModeThread(threading.Thread):
-    def __init__(self,threadID,threadName,save_filename,datalist,modethreadlock):
+class BlockThread(threading.Thread):
+    def __init__(self,threadID,threadName,save_filename,datalist,blockthreadlock):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.threadName = threadName
         self.save_file = save_filename
         self.datalist = datalist
-        self.threadLockMode = modethreadlock
+        self.threadLockMode = blockthreadlock
     def run(self):
         # 获得锁，成功获得锁定后返回True
         # 可选的timeout参数不填时将一直阻塞直到获得锁定
         # 否则超时后将返回False
-        print("Starting " + self.threadID + " Name: "+self.threadName)
+        print("Starting " + self.threadID + " Name: "+self.threadName+" Time:[%s]"%time.ctime(time.time()))
         self.threadLockMode.acquire()
         # MakeVocabs
         Vocabs = set()
@@ -162,11 +159,11 @@ class ModeThread(threading.Thread):
         self.threadLockMode.release()
 def process_file(task_file,seplength = 200,delay = 3):
     threadID = getRadomNum()
-    (filepath,threadName) = os.path.split(task_filename)
+    (filepath,threadName) = os.path.split(task_file)
     # Deination in ModeThread
     print("start thread")
     threadLockFile = threading.Lock()
-    thread = FileThread(threadID,threadName,task_filename,save_filename,seplength,delay,threadLockFile)
+    thread = FileThread(threadID,threadName,task_file,config.vocab_file,seplength,delay,threadLockFile)
     thread.start()
     print("exit thread")
 def main(_):
