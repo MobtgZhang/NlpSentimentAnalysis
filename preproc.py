@@ -34,20 +34,10 @@ def GetEmbeddings(Vocabs,embedding_file):
         if word not in word_vecs:
             word_vecs[word] = np.random.uniform(-0.25, 0.25, config.word_dim)
     return word_vecs
-def preproc(task_file,save_file,seplength,delay):
+def preproc(task_file,save_file,vocab_file,seplength,delay):
     if not os.path.exists(config.save_datafile):
         os.mkdir(config.save_datafile)
     # Generate the vocabulary
-    dictionary = thsepword.Dictionary(task_file,config.vocab_file,"file",seplength,delay)
+    dictionary = thsepword.Dictionary(task_file,vocab_file,"file",seplength,delay)
     # MakeDataSet
     datasetswords = thsepsent.DataSetWords(task_file,save_file,"file",seplength,delay)
-def main(_):
-    task_file = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
-    # save_file = "/home/asus/AI_Challenger2018/TestData/sent.npz"
-    seplength = 200
-    delay = 3
-    preproc(task_file,config.train_npz,seplength,delay)
-    data = np.load(config.train_npz)
-    
-if __name__ == "__main__":
-    app.run(main)
