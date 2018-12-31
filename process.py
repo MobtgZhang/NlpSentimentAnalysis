@@ -75,12 +75,11 @@ def prepare_embedding(vocab_size,word_to_idx,idx_to_word):
             continue
         weight[index, :] = torch.from_numpy(wvmodel.get_vector(idx_to_word[word_to_idx[wvmodel.index2word[i]]]))
     return weight
-def prepare_train(train_features,train_labels,validate_features,validate_labels,weight,word_to_idx,idx_to_word,vocab_size,model_save_file,
-                    num_epochs,batch_size,labels,learning_rate,num_hiddens = 100,num_layers = 2,bidirectional = True):
+def prepare_train(train_features,train_labels,validate_features,validate_labels,weight,word_to_idx,idx_to_word,
+        vocab_size,model_save_file,num_epochs,batch_size,labels,learning_rate):
     device = torch.device(config.device)
     use_gpu = torch.cuda.is_available()
-    net = SentimentNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,num_hiddens=num_hiddens, num_layers=num_layers,
-                   bidirectional=bidirectional, weight=weight,word_to_idx = word_to_idx,idx_to_word = idx_to_word,labels=labels, use_gpu=use_gpu)
+    net = SentimentNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,weight=weight,word_to_idx = word_to_idx,idx_to_word = idx_to_word,labels=labels, use_gpu=use_gpu)
     net.to(device)
     loss_function = nn.MSELoss()
     optimizer = optim.SGD(net.parameters(), lr=learning_rate)
@@ -152,8 +151,8 @@ def train_entry():
     # To make the embeddings
     weight = prepare_embedding(vocab_size,word_to_idx,idx_to_word)
     # training the model
-    train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,weight,word_to_idx,idx_to_word,vocab_size,config.model_save_file,
-                    config.num_epochs,config.batch_size,config.labels,config.learning_rate)
+    train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,weight,word_to_idx,idx_to_word,
+        vocab_size,config.model_save_file,config.num_epochs,config.batch_size,config.labels,config.learning_rate)
     # draw pictures
     x1 = np.linspace(0,len(train_loss_list)-1,len(train_loss_list))
     x2 = np.linspace(0,len(validate_loss_list)-1,len(validate_loss_list))
@@ -163,35 +162,3 @@ def train_entry():
     plt.show()
 def test_entry():
     pass
-def main(_):
-    # Make a dictionary
-    filename = "/home/asus/AI_Challenger2018/NewCode5/testData/910b77ca580b4afd.csv.npz"
-    Vocabs = GetVocabs(filename)
-    vocab_size = len(Vocabs)
-    idx_to_word,word_to_idx = prepare_vocab(Vocabs)
-    # To bulid the datatsets
-    sentences_train,labels_train,sentences_test,labels_test = sepData(filename)
-    train_features,train_labels = prepare_train_dataset(sentences_train,labels_train,word_to_idx)
-    validate_features,validate_labels = prepare_validate_dataset(sentences_test,labels_test,word_to_idx)
-    # To make the embeddings
-    weight = prepare_embedding(vocab_size,word_to_idx,idx_to_word)
-    # Preparing the model
-    num_epochs = 5
-    num_hiddens = 100
-    num_layers = 2
-    bidirectional = True
-    batch_size = 50
-    labels = 20
-    learning_rate = 0.8
-    model_save_file = "model.pt"
-    train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,weight,vocab_size,model_save_file,
-                    num_epochs,batch_size,labels,learning_rate,num_hiddens,num_layers,bidirectional)
-    # draw pictures
-    x1 = np.linspace(0,len(train_loss_list)-1,len(train_loss_list))
-    x2 = np.linspace(0,len(validate_loss_list)-1,len(validate_loss_list))
-    plt.plot(x1,train_loss_list)
-    plt.plot(x2,validate_loss_list)
-    plt.savefig(config.picture_save_file)
-    plt.show()
-if __name__ == "__main__":
-    app.run(main)
