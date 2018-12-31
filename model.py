@@ -3,8 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 class SentimentNet(nn.Module):
-    def __init__(self, vocab_size, embed_size, num_hiddens, num_layers,
-                 bidirectional, weight,word_to_idx,idx_to_word,labels, use_gpu):
+    def __init__(self, vocab_size, embed_size,weight,word_to_idx,idx_to_word,labels, use_gpu = False,
+            num_hiddens = 100,num_layers = 2,bidirectional = True,**kwargs):
         super(SentimentNet, self).__init__(**kwargs)
         self.num_hiddens = num_hiddens
         self.num_layers = num_layers
