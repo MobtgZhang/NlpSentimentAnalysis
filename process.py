@@ -15,7 +15,6 @@ from utils import LoadVocabs
 from config import config
 from model import SentimentNet
 
-from test_preparmodel import GetVocabs,sepData
 # Making token datasets
 def MakeSets(Vocabs):
     word_to_idx = {word:k+1 for k,word in enumerate(Vocabs)}
