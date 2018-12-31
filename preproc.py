@@ -8,7 +8,6 @@ import os
 import threading
 from config import config
 from utils import getRadomNum
-import thread_sepwords as thsepword
 import thread_sepsentences as thsepsent
 # Get word embedding 
 def GetEmbeddings(Vocabs,embedding_file):
@@ -37,7 +36,15 @@ def GetEmbeddings(Vocabs,embedding_file):
 def preproc(task_file,save_file,vocab_file,seplength,delay):
     if not os.path.exists(config.save_datafile):
         os.mkdir(config.save_datafile)
-    # Generate the vocabulary
-    dictionary = thsepword.Dictionary(task_file,vocab_file,"file",seplength,delay)
     # MakeDataSet
     datasetswords = thsepsent.DataSetWords(task_file,save_file,"file",seplength,delay)
+def main(_):
+    task_file = "/home/asus/AI_Challenger2018/TestData/testfile.csv"
+    # save_file = "/home/asus/AI_Challenger2018/TestData/sent.npz"
+    seplength = 200
+    delay = 3
+    preproc(task_file,config.train_npz,seplength,delay)
+    data = np.load(config.train_npz)
+    
+if __name__ == "__main__":
+    app.run(main)
