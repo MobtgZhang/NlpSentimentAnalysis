@@ -1,14 +1,13 @@
 from preproc import preproc
 from absl import app
 from config import config
-def train_entry(config):
-    print("train_entry")
+from process import train_entry
 def test_entry(config):
     print("test_entry")
 def main(_):
     # load embeddings
     if config.mode == "train":
-        train_entry(config)
+        train_entry()
     elif config.mode == "data":
         seplength = 1000
         delay = 50
@@ -19,7 +18,7 @@ def main(_):
         # test dataset has 15000 
         preproc(config.test_file,config.test_npz,config.test_vocab_file,seplength,delay)
     elif config.mode == "debug":
-        train_entry(config)
+        train_entry()
     elif config.mode == "test":
         test_entry(config)
     else:
