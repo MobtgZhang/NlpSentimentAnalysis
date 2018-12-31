@@ -115,12 +115,12 @@ class FileThread(threading.Thread):
             # Deination in BlockThread
             threadLockBlock = threading.Lock()
             thread_mode = BlockThread(threadID,threadName,save_filename,datalist,threadLockBlock)
-            # 开启新线程
-            time.sleep(delay)
             thread_mode.start()
             # 添加线程到线程列表
             thread_mode_list.append(thread_mode)
             thread_count += 1
+            # 开启新线程
+            time.sleep(delay)
         return thread_mode_list
 class BlockThread(threading.Thread):
     def __init__(self,threadID,threadName,save_filename,datalist,blockthreadlock):
