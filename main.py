@@ -10,13 +10,13 @@ def main(_):
         train_entry()
     elif config.mode == "data":
         seplength = 1000
-        delay = 50
+        delay = 10
         # train dataset has 90000 
-        preproc(config.train_file,config.train_npz,config.train_vocab_file,seplength,delay)
+        preproc(config.train_file,config.train_npz,seplength,delay)
         # validate dataset has 15000 
-        preproc(config.validation_file,config.validation_npz,config.validate_vocab_file,seplength,delay)
+        preproc(config.validate_file,config.validate_npz,seplength,delay)
         # test dataset has 15000 
-        preproc(config.test_file,config.test_npz,config.test_vocab_file,seplength,delay)
+        preproc(config.test_file,config.test_npz,seplength,delay)
     elif config.mode == "debug":
         train_entry()
     elif config.mode == "test":
