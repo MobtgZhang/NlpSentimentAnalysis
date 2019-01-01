@@ -10,59 +10,18 @@ from absl import app
 import time
 from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
-
-from utils import LoadVocabs
+import os
+from utils import GetVocabs,MakeSets,encode_samples,pad_samples,prepare_vocab
 from config import config
 from model import SentimentNet
 
-from test_preparmodel import GetVocabs,sepData
-# Making token datasets
-def MakeSets(Vocabs):
-    word_to_idx = {word:k+1 for k,word in enumerate(Vocabs)}
-    word_to_idx['<unk>'] = 0
-    idx_to_word = {k+1:word for k,word in enumerate(Vocabs)}
-    idx_to_word[0] = '<unk>'
-    return idx_to_word,word_to_idx
-# Encoding the tokens
-def encode_samples(tokenized_samples,word_to_idx):
-    features = []
-    for sample in tokenized_samples:
-        feature = []
-        for token in sample:
-            if token in word_to_idx:
-                feature.append(word_to_idx[token])
-            else:
-                feature.append(0)
-        features.append(feature)
-    return features
-# Encoding the features
-def pad_samples(features, maxlen=1000, PAD=0):
-    padded_features = []
-    for feature in features:
-        if len(feature) >= maxlen:
-            padded_feature = feature[:maxlen]
-        else:
-            padded_feature = feature
-            while(len(padded_feature) < maxlen):
-                padded_feature.append(PAD)
-        padded_features.append(padded_feature)
-    return padded_features
-def prepare_vocab(Vocabs):
-    # Make a dictionary
-    idx_to_word,word_to_idx = MakeSets(Vocabs)
-    return idx_to_word,word_to_idx
-def prepare_train_dataset(sentences_train,labels_train,word_to_idx):
-    print("Preparing train datasets ... ...")
-    train_features = torch.LongTensor(pad_samples(encode_samples(sentences_train,word_to_idx),config.text_length))
-    train_labels = torch.FloatTensor(labels_train)
-    print("Train datasets has been Loaded!")
+from test_preparmodel import sepData
+def prepare_datasets(sentences,labels,word_to_idx,mode):
+    print("Preparing "+mode+" datasets ... ...")
+    train_features = torch.LongTensor(pad_samples(encode_samples(sentences,word_to_idx),config.text_length))
+    train_labels = torch.FloatTensor(labels)
+    print("The "+mode+" datasets has been loaded!")
     return train_features,train_labels
-def prepare_validate_dataset(sentences_validate,labels_validate,word_to_idx):
-    print("Preparing test datasets ... ...")
-    validate_features = torch.LongTensor(pad_samples(encode_samples(sentences_validate,word_to_idx)))
-    validate_labels = torch.FloatTensor(labels_validate)
-    print("Test datasets has been Loaded!")
-    return validate_features,validate_labels
 def prepare_embedding(vocab_size,word_to_idx,idx_to_word):
     print("Loading word2vecs ... ...")
     wvmodel = gensim.models.KeyedVectors.load_word2vec_format(config.wordembedding_file,binary=False, encoding='utf-8')
@@ -75,11 +34,9 @@ def prepare_embedding(vocab_size,word_to_idx,idx_to_word):
             continue
         weight[index, :] = torch.from_numpy(wvmodel.get_vector(idx_to_word[word_to_idx[wvmodel.index2word[i]]]))
     return weight
-def prepare_train(train_features,train_labels,validate_features,validate_labels,weight,word_to_idx,idx_to_word,
-        vocab_size,model_save_file,num_epochs,batch_size,labels,learning_rate):
+def prepare_train(train_features,train_labels,validate_features,validate_labels,weight,net,
+        vocab_size,model_save_file,num_epochs,batch_size,learning_rate):
     device = torch.device(config.device)
-    use_gpu = torch.cuda.is_available()
-    net = SentimentNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,weight=weight,word_to_idx = word_to_idx,idx_to_word = idx_to_word,labels=labels, use_gpu=use_gpu)
     net.to(device)
     loss_function = nn.MSELoss()
     optimizer = optim.SGD(net.parameters(), lr=learning_rate)
@@ -118,47 +75,111 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
                 validate_loss_list.append(loss.cpu().data.numpy().tolist())
         end = time.time()
         runtime = end - start
-        print('epoch: %d, train loss: %.4f, train acc: %.2f, validate loss: %.4f, tevalidate acc: %.2f, time: %.2f' %
+        print('epoch: %d, train loss: %.4f, train acc: %.2f, validate loss: %.4f, validate acc: %.2f, time: %.2f' %
                 (epoch, train_loss.data / n, train_acc / n, validate_losses.data / m, validate_acc / m, runtime))
     # 保存整个网络和参数
     torch.save(net,model_save_file)
     return train_loss_list,validate_loss_list
-def load_train_dataset(filename):
+def load_datasets(filename):
     data = np.load(filename)
     sentences = list(data['sentences'])
-    labels = data['label_list']
+    labels = data['labels']
     return sentences,labels
-def load_validate_dataset(filename):
-    data = np.load(filename)
-    sentences = list(data['sentences'])
-    labels = data['label_list']
-    return sentences,labels
-def train_entry():
+def train_entry(modelname):
+    if os.path.exists(config.model_save_file):
+        print("model is exisits!")
+    
     # combine three vocabulary
     Vocabs = set()
     # Make a dictionary
-    Vocabs_train = LoadVocabs(config.train_vocab_file)
-    Vocabs_validate = LoadVocabs(config.validate_vocab_file)
+    print("Loading vocabulary ...")
+    Vocabs_train = GetVocabs(config.train_npz)
+    Vocabs_validate = GetVocabs(config.validate_npz)
     Vocabs.update(Vocabs_train)
     Vocabs.update(Vocabs_validate)
-    # Make a dictionary
     vocab_size = len(Vocabs)
     idx_to_word,word_to_idx = prepare_vocab(Vocabs)
+    print("Vocabulary loaded !")
     # To bulid the datatsets
-    sentences_train,labels_train,sentences_test,labels_test = sepData(filename)
-    train_features,train_labels = load_train_dataset(config.train_npz)
-    validate_features,validate_labels = prepare_validate_dataset(config.validate_npz)
+    # Train datasets
+    print("Preparing datasets ...")
+    sentences_train,labels_train = load_datasets(config.train_npz)
+    train_features,train_labels = prepare_datasets(sentences_train,labels_train,word_to_idx,"train")
+    
+    sentences_validate,labels_validate = load_datasets(config.validate_npz)
+    validate_features,validate_labels = prepare_datasets(sentences_validate,labels_validate,word_to_idx,"validate")
+
     # To make the embeddings
     weight = prepare_embedding(vocab_size,word_to_idx,idx_to_word)
     # training the model
-    train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,weight,word_to_idx,idx_to_word,
-        vocab_size,config.model_save_file,config.num_epochs,config.batch_size,config.labels,config.learning_rate)
+    if not os.path.exisits(config.save_statics_file):
+        os.mkdir(config.save_statics_file)
+    if modelname == "SentimentNet":
+        net = SentimentNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,
+            weight=weight,word_to_idx = word_to_idx,idx_to_word = idx_to_word,labels=config.labels, use_gpu=config.use_gpu)
+    
+    train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,weight,net,
+        vocab_size,config.model_save_file,config.num_epochs,config.batch_size,config.learning_rate)
     # draw pictures
     x1 = np.linspace(0,len(train_loss_list)-1,len(train_loss_list))
-    x2 = np.linspace(0,len(validate_loss_list)-1,len(validate_loss_list))
     plt.plot(x1,train_loss_list)
+    plt.title('Train loss',fontsize=12)
+    num = 0
+    while True:
+        if not os.path.exists(config.pic_trainloss_savefile):
+            plt.savefig(config.pic_trainloss_savefile)
+        else:
+            filename = config.pic_trainloss_savefile + str(num)
+            plt.savefig(filename)
+            num += 1
+    plt.show()
+
+    x2 = np.linspace(0,len(validate_loss_list)-1,len(validate_loss_list))
     plt.plot(x2,validate_loss_list)
-    plt.savefig(config.picture_save_file)
+    plt.title('validate loss',fontsize=12)
+    while True:
+        if not os.path.exists(config.pic_validateloss_savefile):
+            plt.savefig(config.pic_validateloss_savefile)
+        else:
+            filename = config.pic_validateloss_savefile + str(num)
+            plt.savefig(filename)
+            num += 1
     plt.show()
 def test_entry():
-    pass
+    # loading model
+    net = torch.load(config.model_save_file)
+    word_to_idx = net.word_to_idx
+    # preparing test datasets
+    sentences_test,labels_test = load_datasets(config.test_npz)
+    test_features,test_labels = prepare_datasets(sentences_test,labels_test,word_to_idx,"test")
+
+    test_set = torch.utils.data.TensorDataset(test_features, test_labels)
+    test_iter = torch.utils.data.DataLoader(test_set, batch_size=config.batch_size,shuffle=False)
+    start = time.time()
+    test_losses = 0
+    test_acc = 0
+    m = 0
+    test_loss_list = []
+    loss_function = nn.MSELoss()
+    with torch.no_grad():
+        for test_feature, test_label in test_iter:
+            m += 1
+            test_feature = test_feature.cuda()
+            test_label = test_label.cuda()
+            test_score = net(test_feature)
+            test_loss = loss_function(test_score, test_label)
+            test_acc += accuracy_score(torch.argmax(test_score.cpu().data,dim=1), torch.argmax(test_label.cpu().data,dim=1))
+            test_losses += validate_loss
+            test_loss_list.append(loss.cpu().data.numpy().tolist())
+    # draw pictures
+    x = np.linspace(0,len(test_loss_list)-1,len(test_loss_list))
+    plt.plot(x,train_loss_list,label = "train loss")
+    num = 0
+    while True:
+        if not os.path.exists(config.pic_testloss_savefile):
+            plt.savefig(config.pic_testloss_savefile)
+        else:
+            filename = config.pic_testloss_savefile + str(num)
+            plt.savefig(filename)
+            num += 1
+    plt.show()
