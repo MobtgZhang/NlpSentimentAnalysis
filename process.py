@@ -11,11 +11,11 @@ import time
 from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 import os
+
 from utils import GetVocabs,MakeSets,encode_samples,pad_samples,prepare_vocab
 from config import config
-from model import SentimentNet
+from model import SentimentNet,textCNN
 
-from test_preparmodel import sepData
 def prepare_datasets(sentences,labels,word_to_idx,mode):
     print("Preparing "+mode+" datasets ... ...")
     train_features = torch.LongTensor(pad_samples(encode_samples(sentences,word_to_idx),config.text_length))
@@ -87,7 +87,7 @@ def load_datasets(filename):
     return sentences,labels
 def train_entry(modelname):
     if os.path.exists(config.model_save_file):
-        print("model is exisits!")
+        print("model is existed!")
     
     # combine three vocabulary
     Vocabs = set()
@@ -112,12 +112,14 @@ def train_entry(modelname):
     # To make the embeddings
     weight = prepare_embedding(vocab_size,word_to_idx,idx_to_word)
     # training the model
-    if not os.path.exisits(config.save_statics_file):
+    if not os.path.exists(config.save_statics_file):
         os.mkdir(config.save_statics_file)
     if modelname == "SentimentNet":
         net = SentimentNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,
-            weight=weight,word_to_idx = word_to_idx,idx_to_word = idx_to_word,labels=config.labels, use_gpu=config.use_gpu)
-    
+            weight=weight,word_to_idx = word_to_idx,idx_to_word = idx_to_word,labels=config.labels)
+    elif modelname == "textCNN":
+        net = textCNN(vocab_size, embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels, 
+                weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
     train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,weight,net,
         vocab_size,config.model_save_file,config.num_epochs,config.batch_size,config.learning_rate)
     # draw pictures
@@ -128,9 +130,12 @@ def train_entry(modelname):
     while True:
         if not os.path.exists(config.pic_trainloss_savefile):
             plt.savefig(config.pic_trainloss_savefile)
+            break
         else:
-            filename = config.pic_trainloss_savefile + str(num)
-            plt.savefig(filename)
+            file_a = config.pic_trainloss_savefile.split(".")[0]
+            file_b = config.pic_trainloss_savefile.split(".")[1]
+            filename = file_a + str(num) + file_b
+            config.pic_trainloss_savefile = filename
             num += 1
     plt.show()
 
@@ -140,9 +145,12 @@ def train_entry(modelname):
     while True:
         if not os.path.exists(config.pic_validateloss_savefile):
             plt.savefig(config.pic_validateloss_savefile)
+            break
         else:
-            filename = config.pic_validateloss_savefile + str(num)
-            plt.savefig(filename)
+            file_a = config.pic_validateloss_savefile.split(".")[0]
+            file_b = config.pic_validateloss_savefile.split(".")[1]
+            filename = file_a + str(num) + file_b
+            config.pic_validateloss_savefile = filename
             num += 1
     plt.show()
 def test_entry():
@@ -178,8 +186,11 @@ def test_entry():
     while True:
         if not os.path.exists(config.pic_testloss_savefile):
             plt.savefig(config.pic_testloss_savefile)
+            break
         else:
-            filename = config.pic_testloss_savefile + str(num)
-            plt.savefig(filename)
+            file_a = config.pic_testloss_savefile.split(".")[0]
+            file_b = config.pic_testloss_savefile.split(".")[1]
+            filename = file_a + str(num) + file_b
+            config.pic_testloss_savefile = filename
             num += 1
     plt.show()
