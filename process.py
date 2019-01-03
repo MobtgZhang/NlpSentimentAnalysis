@@ -11,17 +11,18 @@ import time
 from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 import os
-
-from utils import GetVocabs,MakeSets,encode_samples,pad_samples,prepare_vocab
+from utils import GetVocabs,MakeSets,encode_samples,pad_samples,prepare_vocab,prepare_labels
 from config import config
 from model import SentimentNet,textCNN
 
+from test_preparmodel import sepData
 def prepare_datasets(sentences,labels,word_to_idx,mode):
     print("Preparing "+mode+" datasets ... ...")
-    train_features = torch.LongTensor(pad_samples(encode_samples(sentences,word_to_idx),config.text_length))
-    train_labels = torch.FloatTensor(labels)
+    features = torch.LongTensor(pad_samples(encode_samples(sentences,word_to_idx),config.text_length))
+    scaler = prepare_labels(labels)
+    labels = torch.FloatTensor(scaler.transform(labels))
     print("The "+mode+" datasets has been loaded!")
-    return train_features,train_labels
+    return features,labels,scaler
 def prepare_embedding(vocab_size,word_to_idx,idx_to_word):
     print("Loading word2vecs ... ...")
     wvmodel = gensim.models.KeyedVectors.load_word2vec_format(config.wordembedding_file,binary=False, encoding='utf-8')
@@ -34,12 +35,12 @@ def prepare_embedding(vocab_size,word_to_idx,idx_to_word):
             continue
         weight[index, :] = torch.from_numpy(wvmodel.get_vector(idx_to_word[word_to_idx[wvmodel.index2word[i]]]))
     return weight
-def prepare_train(train_features,train_labels,validate_features,validate_labels,weight,net,
+def prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
         vocab_size,model_save_file,num_epochs,batch_size,learning_rate):
     device = torch.device(config.device)
     net.to(device)
     loss_function = nn.MSELoss()
-    optimizer = optim.SGD(net.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(net.parameters(), lr=learning_rate)
     train_set = torch.utils.data.TensorDataset(train_features, train_labels)
     validate_set = torch.utils.data.TensorDataset(validate_features, validate_labels)
     validate_iter = torch.utils.data.DataLoader(validate_set, batch_size=batch_size,shuffle=False)
@@ -60,7 +61,13 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
             loss = loss_function(score, label)
             loss.backward()
             optimizer.step()
-            train_acc += accuracy_score(torch.argmax(score.cpu().data,dim=1),torch.argmax(label.cpu().data,dim=1))
+
+            t_score = train_scaler.inverse_transform(score.cpu().data.numpy())
+            t_score = np.squeeze(np.ceil(t_score.reshape(1,-1)))
+            t_label = train_scaler.inverse_transform(label.cpu().data.numpy())
+            t_label = np.squeeze(t_label.reshape(1,-1))
+
+            train_acc += accuracy_score(t_label,t_score)
             train_loss += loss
             train_loss_list.append(loss.cpu().data.numpy().tolist())
         with torch.no_grad():
@@ -70,9 +77,17 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
                 validate_label = validate_label.cuda()
                 validate_score = net(validate_feature)
                 validate_loss = loss_function(validate_score, validate_label)
-                validate_acc += accuracy_score(torch.argmax(validate_score.cpu().data,dim=1), torch.argmax(validate_label.cpu().data,dim=1))
+                v_score = validate_scaler.inverse_transform(validate_score.cpu().data.numpy())
+                v_label = validate_scaler.inverse_transform(validate_label.cpu().data.numpy())
+
+                v_score = validate_scaler.inverse_transform(score.cpu().data.numpy())
+                v_score = np.squeeze(np.ceil(v_score.reshape(1,-1)))
+                v_label = validate_scaler.inverse_transform(label.cpu().data.numpy())
+                v_label = np.squeeze(v_label.reshape(1,-1))
+
+                validate_acc += accuracy_score(v_label,v_score)
                 validate_losses += validate_loss
-                validate_loss_list.append(loss.cpu().data.numpy().tolist())
+                validate_loss_list.append(validate_loss.cpu().data.numpy().tolist())
         end = time.time()
         runtime = end - start
         print('epoch: %d, train loss: %.4f, train acc: %.2f, validate loss: %.4f, validate acc: %.2f, time: %.2f' %
@@ -88,7 +103,6 @@ def load_datasets(filename):
 def train_entry(modelname):
     if os.path.exists(config.model_save_file):
         print("model is existed!")
-    
     # combine three vocabulary
     Vocabs = set()
     # Make a dictionary
@@ -104,10 +118,10 @@ def train_entry(modelname):
     # Train datasets
     print("Preparing datasets ...")
     sentences_train,labels_train = load_datasets(config.train_npz)
-    train_features,train_labels = prepare_datasets(sentences_train,labels_train,word_to_idx,"train")
+    train_features,train_labels,train_scaler = prepare_datasets(sentences_train,labels_train,word_to_idx,"train")
     
     sentences_validate,labels_validate = load_datasets(config.validate_npz)
-    validate_features,validate_labels = prepare_datasets(sentences_validate,labels_validate,word_to_idx,"validate")
+    validate_features,validate_labels,validate_scaler = prepare_datasets(sentences_validate,labels_validate,word_to_idx,"validate")
 
     # To make the embeddings
     weight = prepare_embedding(vocab_size,word_to_idx,idx_to_word)
@@ -120,7 +134,7 @@ def train_entry(modelname):
     elif modelname == "textCNN":
         net = textCNN(vocab_size, embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels, 
                 weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
-    train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,weight,net,
+    train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
         vocab_size,config.model_save_file,config.num_epochs,config.batch_size,config.learning_rate)
     # draw pictures
     x1 = np.linspace(0,len(train_loss_list)-1,len(train_loss_list))
@@ -132,8 +146,9 @@ def train_entry(modelname):
             plt.savefig(config.pic_trainloss_savefile)
             break
         else:
-            file_a = config.pic_trainloss_savefile.split(".")[0]
-            file_b = config.pic_trainloss_savefile.split(".")[1]
+            (filepath,filename) = os.path.split(config.pic_trainloss_savefile)
+            file_a = filename.split(".")[0]
+            file_b = filename.split(".")[1]
             filename = file_a + str(num) + file_b
             config.pic_trainloss_savefile = filename
             num += 1
@@ -147,8 +162,9 @@ def train_entry(modelname):
             plt.savefig(config.pic_validateloss_savefile)
             break
         else:
-            file_a = config.pic_validateloss_savefile.split(".")[0]
-            file_b = config.pic_validateloss_savefile.split(".")[1]
+            (filepath,filename) = os.path.split(config.pic_validateloss_savefile)
+            file_a = filename.split(".")[0]
+            file_b = filename.split(".")[1]
             filename = file_a + str(num) + file_b
             config.pic_validateloss_savefile = filename
             num += 1
@@ -159,7 +175,7 @@ def test_entry():
     word_to_idx = net.word_to_idx
     # preparing test datasets
     sentences_test,labels_test = load_datasets(config.test_npz)
-    test_features,test_labels = prepare_datasets(sentences_test,labels_test,word_to_idx,"test")
+    test_features,test_labels,test_scaler = prepare_datasets(sentences_test,labels_test,word_to_idx,"test")
 
     test_set = torch.utils.data.TensorDataset(test_features, test_labels)
     test_iter = torch.utils.data.DataLoader(test_set, batch_size=config.batch_size,shuffle=False)
@@ -176,20 +192,29 @@ def test_entry():
             test_label = test_label.cuda()
             test_score = net(test_feature)
             test_loss = loss_function(test_score, test_label)
-            test_acc += accuracy_score(torch.argmax(test_score.cpu().data,dim=1), torch.argmax(test_label.cpu().data,dim=1))
-            test_losses += validate_loss
-            test_loss_list.append(loss.cpu().data.numpy().tolist())
+            te_score = test_scaler.inverse_transform(test_score.cpu().data.numpy())
+            te_label = test_scaler.inverse_transform(test_label.cpu().data.numpy())
+
+            te_score = test_scaler.inverse_transform(te_score.cpu().data.numpy())
+            te_score = np.squeeze(np.ceil(te_score.reshape(1,-1)))
+            te_label = test_scaler.inverse_transform(te_label.cpu().data.numpy())
+            te_label = np.squeeze(te_label.reshape(1,-1))
+
+            test_acc += accuracy_score(te_label,te_score)
+            test_losses += test_losses
+            test_loss_list.append(test_loss.cpu().data.numpy().tolist())
     # draw pictures
     x = np.linspace(0,len(test_loss_list)-1,len(test_loss_list))
-    plt.plot(x,train_loss_list,label = "train loss")
+    plt.plot(x,test_loss_list,label = "train loss")
     num = 0
     while True:
         if not os.path.exists(config.pic_testloss_savefile):
             plt.savefig(config.pic_testloss_savefile)
             break
         else:
-            file_a = config.pic_testloss_savefile.split(".")[0]
-            file_b = config.pic_testloss_savefile.split(".")[1]
+            (filepath,filename) = os.path.split(config.pic_testloss_savefile)
+            file_a = filename.split(".")[0]
+            file_b = filename.split(".")[1]
             filename = file_a + str(num) + file_b
             config.pic_testloss_savefile = filename
             num += 1
