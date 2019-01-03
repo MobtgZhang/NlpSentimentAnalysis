@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from config import config
 class SentimentNet(nn.Module):
     def __init__(self, vocab_size, embed_size,weight,word_to_idx,idx_to_word,labels,
-            num_hiddens = 100,num_layers = 5,bidirectional = True,**kwargs):
+            num_hiddens = 100,num_layers = 3,bidirectional = True,**kwargs):
         super(SentimentNet, self).__init__(**kwargs)
         self.num_hiddens = num_hiddens
         self.num_layers = num_layers
