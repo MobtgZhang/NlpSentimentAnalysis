@@ -3,6 +3,7 @@ import uuid
 import pandas as pd
 import numpy as np
 from config import config
+from sklearn import preprocessing
 # five score
 
 # Making token datasets
@@ -40,6 +41,9 @@ def prepare_vocab(Vocabs):
     # Make a dictionary
     idx_to_word,word_to_idx = MakeSets(Vocabs)
     return idx_to_word,word_to_idx
+def prepare_labels(labels):
+    scaler = preprocessing.MaxAbsScaler().fit(labels)
+    return scaler
 # random creates a file for every data file
 def getRadomNum():
     res = str(uuid.uuid4())
