@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import os
 from utils import GetVocabs,MakeSets,encode_samples,pad_samples,prepare_vocab,prepare_labels
 from config import config
-from model import SentimentNet,textCNN
+from model import BiLSTMNet,textCNN,BiGRUNet
 
 from test_preparmodel import sepData
 def prepare_datasets(sentences,labels,word_to_idx,mode):
@@ -128,12 +128,17 @@ def train_entry(modelname):
     # training the model
     if not os.path.exists(config.save_statics_file):
         os.mkdir(config.save_statics_file)
-    if modelname == "SentimentNet":
-        net = SentimentNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,
+    if modelname == "BiLSTMNet":
+        net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,
             weight=weight,word_to_idx = word_to_idx,idx_to_word = idx_to_word,labels=config.labels)
     elif modelname == "textCNN":
         net = textCNN(vocab_size, embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels, 
                 weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
+    elif modelname == "BiGRUNet":
+        net = BiGRUNet(vocab_size, embed_size = config.word_dim,labels= config.labels, 
+                weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
+    else:
+        raise Exception("unknown model")
     train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
         vocab_size,config.model_save_file,config.num_epochs,config.batch_size,config.learning_rate)
     # draw pictures
