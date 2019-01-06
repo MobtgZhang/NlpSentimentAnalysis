@@ -7,7 +7,7 @@ def test_entry(config):
 def main(_):
     # load embeddings
     if config.mode == "train":
-        train_entry()
+        train_entry("BiLSTMNet")
     elif config.mode == "data":
         seplength = 1000
         delay = 10
@@ -18,7 +18,7 @@ def main(_):
         # test dataset has 15000 
         preproc(config.test_file,config.test_npz,seplength,delay)
     elif config.mode == "debug":
-        train_entry()
+        train_entry("BiLSTMNet")
     elif config.mode == "test":
         test_entry(config)
     else:
