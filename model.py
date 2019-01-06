@@ -3,10 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from config import config
-class SentimentNet(nn.Module):
+class BiLSTMNet(nn.Module):
     def __init__(self, vocab_size, embed_size,weight,word_to_idx,idx_to_word,labels,
-            num_hiddens = 100,num_layers = 3,bidirectional = True,**kwargs):
-        super(SentimentNet, self).__init__(**kwargs)
+            num_hiddens = 100,num_layers = 2,bidirectional = True,**kwargs):
+        super(BiLSTMNet, self).__init__(**kwargs)
         self.num_hiddens = num_hiddens
         self.num_layers = num_layers
         self.word_to_idx = word_to_idx
@@ -15,6 +15,30 @@ class SentimentNet(nn.Module):
         self.embedding = nn.Embedding.from_pretrained(weight)
         self.embedding.weight.requires_grad = False
         self.encoder = nn.LSTM(input_size=embed_size, hidden_size=self.num_hiddens,
+                               num_layers=num_layers, bidirectional=self.bidirectional,
+                               dropout=0.1)
+        if self.bidirectional:
+            self.decoder = nn.Linear(num_hiddens * 4, labels)
+        else:
+            self.decoder = nn.Linear(num_hiddens * 2, labels)
+    def forward(self, inputs):
+        embeddings = self.embedding(inputs)
+        states, hidden = self.encoder(embeddings.permute([1, 0, 2]))
+        encoding = torch.cat([states[0], states[-1]], dim=1)
+        outputs = self.decoder(encoding)
+        return outputs
+class BiGRUNet(nn.Module):
+    def __init__(self, vocab_size, embed_size,weight,word_to_idx,idx_to_word,labels,
+            num_hiddens = 100,num_layers = 2,bidirectional = True,**kwargs):
+        super(BiGRUNet, self).__init__(**kwargs)
+        self.num_hiddens = num_hiddens
+        self.num_layers = num_layers
+        self.word_to_idx = word_to_idx
+        self.idx_to_word = idx_to_word
+        self.bidirectional = bidirectional
+        self.embedding = nn.Embedding.from_pretrained(weight)
+        self.embedding.weight.requires_grad = False
+        self.encoder = nn.GRU(input_size=embed_size, hidden_size=self.num_hiddens,
                                num_layers=num_layers, bidirectional=self.bidirectional,
                                dropout=0.1)
         if self.bidirectional:
