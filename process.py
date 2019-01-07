@@ -11,9 +11,11 @@ import time
 from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 import os
+import math
+from tqdm import tqdm
 from utils import GetVocabs,MakeSets,encode_samples,pad_samples,prepare_vocab,prepare_labels
 from config import config
-from model import BiLSTMNet,textCNN,BiGRUNet
+from model import BiLSTMNet,textCNN,BiGRUNet,EMA,MANNet
 
 from test_preparmodel import sepData
 def prepare_datasets(sentences,labels,word_to_idx,mode):
@@ -40,19 +42,30 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
     device = torch.device(config.device)
     net.to(device)
     loss_function = nn.MSELoss()
-    optimizer = optim.Adam(net.parameters(), lr=learning_rate)
+
+    base_lr = 1.0
+    warm_up = config.lr_warm_up_num
+
+    ema = EMA(config.ema_decay)
+    for name, p in net.named_parameters():
+        if p.requires_grad: ema.set(name, p)
+    params = filter(lambda param: param.requires_grad, net.parameters())
+    optimizer = optim.Adam(lr=base_lr, betas=(config.beta1, config.beta2), eps=1e-7, weight_decay=3e-7, params=params)
+    cr = learning_rate / math.log2(warm_up)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: cr * math.log2(ee + 1) if ee < warm_up else learning_rate)
+
     train_set = torch.utils.data.TensorDataset(train_features, train_labels)
     validate_set = torch.utils.data.TensorDataset(validate_features, validate_labels)
     validate_iter = torch.utils.data.DataLoader(validate_set, batch_size=batch_size,shuffle=False)
     train_iter = torch.utils.data.DataLoader(train_set, batch_size=batch_size,shuffle=True)
     train_loss_list = []
     validate_loss_list = []
-    for epoch in range(num_epochs):
+    for epoch in tqdm(range(num_epochs),"epoches: "):
         start = time.time()
         train_loss, validate_losses = 0, 0
         train_acc, validate_acc = 0, 0
         n, m = 0, 0
-        for feature, label in train_iter:
+        for feature, label in tqdm(train_iter,"train: "):
             n += 1
             net.zero_grad()
             feature = Variable(feature.cuda())
@@ -61,7 +74,10 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
             loss = loss_function(score, label)
             loss.backward()
             optimizer.step()
-
+            scheduler.step()
+            for name,p in net.named_parameters():
+                if p.requires_grad:ema.update_parameter(name,p)
+            torch.nn.utils.clip_grad_norm_(net.parameters(),config.grad_clip)
             t_score = train_scaler.inverse_transform(score.cpu().data.numpy())
             t_score = np.squeeze(np.ceil(t_score.reshape(1,-1)))
             t_label = train_scaler.inverse_transform(label.cpu().data.numpy())
@@ -71,7 +87,7 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
             train_loss += loss
             train_loss_list.append(loss.cpu().data.numpy().tolist())
         with torch.no_grad():
-            for validate_feature, validate_label in validate_iter:
+            for validate_feature, validate_label in tqdm(validate_iter,"validate: "):
                 m += 1
                 validate_feature = validate_feature.cuda()
                 validate_label = validate_label.cuda()
@@ -137,6 +153,9 @@ def train_entry(modelname):
     elif modelname == "BiGRUNet":
         net = BiGRUNet(vocab_size, embed_size = config.word_dim,labels= config.labels, 
                 weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
+    elif modelname == "MANNet":
+        net = MANNet(vocab_size, embed_size = config.word_dim,encoder_size = 600,labels= config.labels, 
+                weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
     else:
         raise Exception("unknown model")
     train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
@@ -176,7 +195,11 @@ def train_entry(modelname):
     plt.show()
 def test_entry():
     # loading model
-    net = torch.load(config.model_save_file)
+    if os.path.exists(config.model_save_file):
+        net = torch.load(config.model_save_file)
+    else:
+        print("There is no model in file: "+config.save_statics_file)
+        return 
     word_to_idx = net.word_to_idx
     # preparing test datasets
     sentences_test,labels_test = load_datasets(config.test_npz)
@@ -191,7 +214,7 @@ def test_entry():
     test_loss_list = []
     loss_function = nn.MSELoss()
     with torch.no_grad():
-        for test_feature, test_label in test_iter:
+        for test_feature, test_label in tqdm(test_iter,"test: "):
             m += 1
             test_feature = test_feature.cuda()
             test_label = test_label.cuda()
@@ -200,14 +223,17 @@ def test_entry():
             te_score = test_scaler.inverse_transform(test_score.cpu().data.numpy())
             te_label = test_scaler.inverse_transform(test_label.cpu().data.numpy())
 
-            te_score = test_scaler.inverse_transform(te_score.cpu().data.numpy())
-            te_score = np.squeeze(np.ceil(te_score.reshape(1,-1)))
-            te_label = test_scaler.inverse_transform(te_label.cpu().data.numpy())
+            te_score = test_scaler.inverse_transform(te_score)
+            te_score = np.squeeze(np.round(te_score.reshape(1,-1)))
+            te_label = test_scaler.inverse_transform(te_label)
             te_label = np.squeeze(te_label.reshape(1,-1))
 
             test_acc += accuracy_score(te_label,te_score)
-            test_losses += test_losses
+            test_losses += test_loss
             test_loss_list.append(test_loss.cpu().data.numpy().tolist())
+    end = time.time()
+    runtime = end - start
+    print('test loss: %.4f, test acc: %.2f, time: %.2f' %(test_losses.data / m, test_acc / m, runtime))
     # draw pictures
     x = np.linspace(0,len(test_loss_list)-1,len(test_loss_list))
     plt.plot(x,test_loss_list,label = "train loss")
