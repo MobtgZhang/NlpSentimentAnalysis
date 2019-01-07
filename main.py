@@ -5,7 +5,7 @@ from process import train_entry,test_entry
 def main(_):
     # load embeddings
     if config.mode == "train":
-        train_entry("textCNN")
+        train_entry("BiLSTMNet")
     elif config.mode == "data":
         seplength = 1000
         delay = 10
@@ -16,10 +16,9 @@ def main(_):
         # test dataset has 15000 
         preproc(config.test_file,config.test_npz,seplength,delay)
     elif config.mode == "debug":
-        pass
-        # train_entry()
+        train_entry("BiLSTMNet")
     elif config.mode == "test":
-        test_entry()
+        test_entry("log/model.pt")
     else:
         print("Unknown mode")
         exit(0)
