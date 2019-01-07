@@ -49,8 +49,13 @@ flags.DEFINE_integer("test_delay",500, "test raw dataset delay time")
 
 # model definations
 flags.DEFINE_integer("num_epochs",15, "the numbers for training")
-flags.DEFINE_integer("batch_size",50, "the batchsize to seperate raw data for trainig data")
+flags.DEFINE_integer("batch_size",2000, "the batchsize to seperate raw data for trainig data")
 flags.DEFINE_float("learning_rate",0.8, "the learningrate for trainig data")
+flags.DEFINE_integer("lr_warm_up_num", 1000, "Number of warm-up steps of learning rate")
+flags.DEFINE_float("grad_clip", 5.0, "Global Norm gradient clipping rate")
+flags.DEFINE_float("ema_decay", 0.9999, "Exponential moving average decay")
+flags.DEFINE_float("beta1", 0.8, "Beta 1")
+flags.DEFINE_float("beta2", 0.999, "Beta 2")
 
 # model save files
 save_statics_file = os.path.join(home,"log")
