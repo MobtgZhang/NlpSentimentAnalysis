@@ -17,7 +17,6 @@ from utils import GetVocabs,MakeSets,encode_samples,pad_samples,prepare_vocab,pr
 from config import config
 from model import BiLSTMNet,textCNN,BiGRUNet,EMA,MANNet
 
-
 def prepare_datasets(sentences,labels,word_to_idx,mode):
     print("Preparing "+mode+" datasets ... ...")
     features = torch.LongTensor(pad_samples(encode_samples(sentences,word_to_idx),config.text_length))
@@ -117,18 +116,20 @@ def load_datasets(filename):
     labels = data['labels']
     return sentences,labels
 def train_entry(modelname):
-    if os.path.exists(config.model_save_file):
-        print("model is existed!")
     # combine three vocabulary
     Vocabs = set()
     # Make a dictionary
     print("Loading vocabulary ...")
     Vocabs_train = GetVocabs(config.train_npz)
     Vocabs_validate = GetVocabs(config.validate_npz)
+    Vocabs_test = GetVocabs(config.test_npz)
     Vocabs.update(Vocabs_train)
     Vocabs.update(Vocabs_validate)
+    Vocabs.update(Vocabs_test)
     vocab_size = len(Vocabs)
     idx_to_word,word_to_idx = prepare_vocab(Vocabs)
+    # Save vocabulary
+    np.savez(config.vocab_file,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
     print("Vocabulary loaded !")
     # To bulid the datatsets
     # Train datasets
@@ -145,25 +146,18 @@ def train_entry(modelname):
     if not os.path.exists(config.save_statics_file):
         os.mkdir(config.save_statics_file)
     if modelname == "BiLSTMNet":
-        config.model_save_file = "BiLSTMNet.pkl"
-        net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,
-            weight=weight,word_to_idx = word_to_idx,idx_to_word = idx_to_word,labels=config.labels)
+        net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,weight=weight,labels=config.labels,)
     elif modelname == "textCNN":
-        config.model_save_file = "textCNN.pkl"
-        net = textCNN(vocab_size, embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels, 
-                weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
+        net = textCNN(vocab_size=(vocab_size+1), embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels,weight= weight)
     elif modelname == "BiGRUNet":
-        config.model_save_file = "BiGRUNet.pkl"
-        net = BiGRUNet(vocab_size, embed_size = config.word_dim,labels= config.labels, 
-                weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
+        net = BiGRUNet(vocab_size=(vocab_size+1), embed_size = config.word_dim,labels= config.labels,weight= weight)
     elif modelname == "MANNet":
-        config.model_save_file = "MANNet.pkl"
-        net = MANNet(vocab_size, embed_size = config.word_dim,encoder_size = 600,labels= config.labels, 
-                weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
+        net = MANNet(vocab_size=(vocab_size+1), embed_size = config.word_dim,encoder_size = 600,labels= config.labels,weight= weight)
     else:
         raise Exception("unknown model")
+    model_save_file = os.path.join(config.save_statics_file,modelname + ".pkl")
     train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
-        vocab_size,config.model_save_file,config.num_epochs,config.batch_size,config.learning_rate)
+        vocab_size,model_save_file,config.num_epochs,config.batch_size,config.learning_rate)
     # draw pictures
     x1 = np.linspace(0,len(train_loss_list)-1,len(train_loss_list))
     plt.plot(x1,train_loss_list)
@@ -197,14 +191,15 @@ def train_entry(modelname):
             config.pic_validateloss_savefile = filename
             num += 1
     plt.show()
-def test_entry():
+def test_entry(filename):
     # loading model
-    if os.path.exists(config.model_save_file):
-        net = torch.load(config.model_save_file)
+    if os.path.exists(filename):
+        net = torch.load(filename)
     else:
-        print("There is no model in file: "+config.save_statics_file)
+        print("There is no model in file: "+filename)
         return 
-    word_to_idx = net.word_to_idx
+    data = np.load(config.vocab_file)
+    word_to_idx = data["word_to_idx"][()]
     # preparing test datasets
     sentences_test,labels_test = load_datasets(config.test_npz)
     test_features,test_labels,test_scaler = prepare_datasets(sentences_test,labels_test,word_to_idx,"test")
