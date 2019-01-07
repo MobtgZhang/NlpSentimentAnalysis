@@ -49,7 +49,7 @@ flags.DEFINE_integer("test_delay",500, "test raw dataset delay time")
 
 # model definations
 flags.DEFINE_integer("num_epochs",15, "the numbers for training")
-flags.DEFINE_integer("batch_size",2000, "the batchsize to seperate raw data for trainig data")
+flags.DEFINE_integer("batch_size",100, "the batchsize to seperate raw data for trainig data")
 flags.DEFINE_float("learning_rate",0.8, "the learningrate for trainig data")
 flags.DEFINE_integer("lr_warm_up_num", 1000, "Number of warm-up steps of learning rate")
 flags.DEFINE_float("grad_clip", 5.0, "Global Norm gradient clipping rate")
@@ -59,16 +59,17 @@ flags.DEFINE_float("beta2", 0.999, "Beta 2")
 
 # model save files
 save_statics_file = os.path.join(home,"log")
-model_save_file = os.path.join(home,save_statics_file,"model.pt")
 pic_trainloss_savefile = os.path.join(home,save_statics_file,"pic_train.png")
 pic_validateloss_savefile = os.path.join(home,save_statics_file,"pic_validate.png")
 pic_testloss_savefile = os.path.join(home,save_statics_file,"pic_test.png")
+
+vocab_file = os.path.join(home,save_datafile,"vocab.npz")
+flags.DEFINE_string("vocab_file",vocab_file,"")
 
 flags.DEFINE_string("save_statics_file",save_statics_file,"")
 flags.DEFINE_string("pic_trainloss_savefile", pic_trainloss_savefile, "")
 flags.DEFINE_string("pic_validateloss_savefile", pic_validateloss_savefile, "")
 flags.DEFINE_string("pic_testloss_savefile", pic_testloss_savefile, "")
-flags.DEFINE_string("model_save_file", model_save_file, "")
 
 config = flags.FLAGS
 device = "cuda" if torch.cuda.is_available() else "cpu"
