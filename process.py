@@ -17,7 +17,7 @@ from utils import GetVocabs,MakeSets,encode_samples,pad_samples,prepare_vocab,pr
 from config import config
 from model import BiLSTMNet,textCNN,BiGRUNet,EMA,MANNet
 
-from test_preparmodel import sepData
+
 def prepare_datasets(sentences,labels,word_to_idx,mode):
     print("Preparing "+mode+" datasets ... ...")
     features = torch.LongTensor(pad_samples(encode_samples(sentences,word_to_idx),config.text_length))
@@ -145,15 +145,19 @@ def train_entry(modelname):
     if not os.path.exists(config.save_statics_file):
         os.mkdir(config.save_statics_file)
     if modelname == "BiLSTMNet":
+        config.model_save_file = "BiLSTMNet.pkl"
         net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,
             weight=weight,word_to_idx = word_to_idx,idx_to_word = idx_to_word,labels=config.labels)
     elif modelname == "textCNN":
+        config.model_save_file = "textCNN.pkl"
         net = textCNN(vocab_size, embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels, 
                 weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
     elif modelname == "BiGRUNet":
+        config.model_save_file = "BiGRUNet.pkl"
         net = BiGRUNet(vocab_size, embed_size = config.word_dim,labels= config.labels, 
                 weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
     elif modelname == "MANNet":
+        config.model_save_file = "MANNet.pkl"
         net = MANNet(vocab_size, embed_size = config.word_dim,encoder_size = 600,labels= config.labels, 
                 weight= weight,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
     else:
