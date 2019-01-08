@@ -37,7 +37,7 @@ def prepare_embedding(vocab_size,word_to_idx,idx_to_word):
         weight[index, :] = torch.from_numpy(wvmodel.get_vector(idx_to_word[word_to_idx[wvmodel.index2word[i]]]))
     return weight
 def prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
-        vocab_size,model_save_file,num_epochs,batch_size,learning_rate):
+        vocab_size,modelname,num_epochs,batch_size,learning_rate):
     device = torch.device(config.device)
     net.to(device)
     loss_function = nn.BCELoss()
@@ -92,12 +92,12 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
                 validate_label = validate_label.cuda()
                 validate_score = net(validate_feature)
                 validate_loss = loss_function(validate_score, validate_label)
-                v_score = validate_scaler.inverse_transform(validate_score.cpu().data.numpy())
-                v_label = validate_scaler.inverse_transform(validate_label.cpu().data.numpy())
+                v_score = validate_score.cpu().data.numpy()
+                v_label = validate_label.cpu().data.numpy()
 
-                v_score = validate_scaler.inverse_transform(score.cpu().data.numpy())
+                v_score = validate_scaler.inverse_transform(v_score)
                 v_score = np.squeeze(np.ceil(v_score.reshape(1,-1))).astype(int)
-                v_label = validate_scaler.inverse_transform(label.cpu().data.numpy())
+                v_label = validate_scaler.inverse_transform(v_label)
                 v_label = np.squeeze(v_label.reshape(1,-1)).astype(int)
 
                 validate_acc += accuracy_score(v_label,v_score)
@@ -107,7 +107,12 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
         runtime = end - start
         print('epoch: %d, train loss: %.4f, train acc: %.2f, validate loss: %.4f, validate acc: %.2f, time: %.2f' %
                 (epoch, train_loss.data / n, train_acc / n, validate_losses.data / m, validate_acc / m, runtime))
+    # make a dir
+    save_file = os.path.join(config.save_statics_file,modelname)
+    if not os.path.exists(save_file):
+        os.mkdir(save_file)
     # 保存整个网络和参数
+    model_save_file = os.path.join(save_file,modelname + ".pkl")
     torch.save(net,model_save_file)
     return train_loss_list,validate_loss_list
 def load_datasets(filename):
@@ -145,21 +150,17 @@ def train_entry(modelname):
     if not os.path.exists(config.save_statics_file):
         os.mkdir(config.save_statics_file)
     if modelname == "BiLSTMNet":
-        model_save_file = os.path.join(config.save_statics_file,"BiLSTMNet.pkl")
         net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,weight=weight,labels=config.labels)
     elif modelname == "textCNN":
-        model_save_file = os.path.join(config.save_statics_file,"textCNN.pkl")
         net = textCNN(vocab_size, embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels,weight= weight)
     elif modelname == "BiGRUNet":
-        model_save_file = os.path.join(config.save_statics_file,"BiGRUNet.pkl")
         net = BiGRUNet(vocab_size, embed_size = config.word_dim,labels= config.labels,weight= weight)
     elif modelname == "MANNet":
-        model_save_file = os.path.join(config.save_statics_file,"MANNet.pkl")
         net = MANNet(vocab_size, embed_size = config.word_dim,encoder_size = 600,labels= config.labels,weight= weight)
     else:
         raise Exception("unknown model")
     train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
-        vocab_size,model_save_file,config.num_epochs,config.batch_size,config.learning_rate)
+        vocab_size,modelname,config.num_epochs,config.batch_size,config.learning_rate)
     # draw pictures
     x1 = np.linspace(0,len(train_loss_list)-1,len(train_loss_list))
     plt.plot(x1,train_loss_list)
@@ -193,14 +194,16 @@ def train_entry(modelname):
             config.pic_validateloss_savefile = filename
             num += 1
     plt.show()
-def test_entry():
+def test_entry(model_save_file):
     # loading model
-    if os.path.exists(config.model_save_file):
-        net = torch.load(config.model_save_file)
+    model_save_file = os.path.join(config.save_statics_file,model_save_file)
+    if os.path.exists(model_save_file):
+        net = torch.load(model_save_file)
     else:
         print("There is no model in file: "+config.save_statics_file)
         return 
-    word_to_idx = net.word_to_idx
+    data = np.load(config.vocab_file)
+    word_to_idx = data['word_to_idx'][()]
     # preparing test datasets
     sentences_test,labels_test = load_datasets(config.test_npz)
     test_features,test_labels,test_scaler = prepare_datasets(sentences_test,labels_test,word_to_idx,"test")
@@ -212,7 +215,7 @@ def test_entry():
     test_acc = 0
     m = 0
     test_loss_list = []
-    loss_function = nn.MSELoss()
+    loss_function = nn.BCELoss()
     with torch.no_grad():
         for test_feature, test_label in tqdm(test_iter,"test: "):
             m += 1
@@ -220,13 +223,14 @@ def test_entry():
             test_label = test_label.cuda()
             test_score = net(test_feature)
             test_loss = loss_function(test_score, test_label)
-            te_score = test_scaler.inverse_transform(test_score.cpu().data.numpy())
-            te_label = test_scaler.inverse_transform(test_label.cpu().data.numpy())
 
+            te_label = test_label.cpu().data.numpy()
+            te_score = test_score.cpu().data.numpy()
+            
             te_score = test_scaler.inverse_transform(te_score)
-            te_score = np.squeeze(np.round(te_score.reshape(1,-1)))
+            te_score = np.squeeze(np.round(te_score.reshape(1,-1))).astype(int)
             te_label = test_scaler.inverse_transform(te_label)
-            te_label = np.squeeze(te_label.reshape(1,-1))
+            te_label = np.squeeze(te_label.reshape(1,-1)).astype(int)
 
             test_acc += accuracy_score(te_label,te_score)
             test_losses += test_loss
