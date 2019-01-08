@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchnlp.nn import SRU
+
 from config import config
 class EMA:
     def __init__(self,decay):
@@ -76,6 +78,37 @@ class BiGRUNet(nn.Module):
             embeddings = self.embedding(inputs.cuda())
         else:
             embeddings = self.embedding(inputs)
+        states, hidden = self.encoder(embeddings.permute([1, 0, 2]))
+        encoding = torch.cat([states[0], states[-1]], dim=1)
+        hidden = self.decoder(encoding)
+        outputs = self.sigmoid(hidden)
+        return outputs.cpu()
+class BiSRU(nn.Module):
+    def __init__(self,vocab_size, embed_size,labels,weight = None,
+            num_hiddens = 100,num_layers = 2,bidirectional = False,use_gpu=False,**kwargs):
+        super(BiSRU,self).__init__()
+        self.num_hiddens = num_hiddens
+        self.num_layers = num_layers
+        self.use_gpu = use_gpu
+        if weight is None:
+            self.embedding = nn.Embedding(vocab_size,embed_size)
+        else:
+            self.embedding = nn.Embedding.from_pretrained(weight)
+            self.embedding.weight.requires_grad = False
+        self.bidirectional = bidirectional
+        self.encoder = SRU(input_size=embed_size, hidden_size=self.num_hiddens,
+                               num_layers=num_layers, bidirectional=self.bidirectional)
+        if self.bidirectional:
+            self.decoder = nn.Linear(num_hiddens * 4, labels)
+        else:
+            self.decoder = nn.Linear(num_hiddens * 2, labels)
+        self.sigmoid = nn.Sigmoid()
+    def forward(self,inputs):
+        if self.use_gpu:
+            embeddings = self.embedding(inputs.cuda())
+        else:
+            embeddings = self.embedding(inputs) # batch*seq_length*input_size
+        # seq_length*batch*input_size
         states, hidden = self.encoder(embeddings.permute([1, 0, 2]))
         encoding = torch.cat([states[0], states[-1]], dim=1)
         hidden = self.decoder(encoding)
@@ -252,13 +285,3 @@ class MANNet(nn.Module):
         del rl
         del rr
         return score.cpu()
-def main():
-    vocab_size = 500
-    embed_size = 800
-    labels = 20
-    bigrunet = BiGRUNet(vocab_size, embed_size,labels,weight = None,num_hiddens = 100,num_layers = 2,bidirectional = True)
-    x = torch.autograd.Variable(torch.LongTensor([[45,78,89],[63,56,78],[45,15,13]]))
-    out = bigrunet(x)
-    print(out)
-if __name__ == "__main__":
-    main()
