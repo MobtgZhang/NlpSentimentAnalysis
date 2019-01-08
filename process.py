@@ -15,7 +15,7 @@ import math
 from tqdm import tqdm
 from utils import GetVocabs,MakeSets,encode_samples,pad_samples,prepare_vocab,prepare_labels
 from config import config
-from model import BiLSTMNet,textCNN,BiGRUNet,EMA,MANNet
+from model import BiLSTMNet,textCNN,BiGRUNet,EMA,MANNet,BiSRU
 
 def prepare_datasets(sentences,labels,word_to_idx,mode):
     print("Preparing "+mode+" datasets ... ...")
@@ -154,6 +154,8 @@ def train_entry(modelname):
         net = BiGRUNet(vocab_size, embed_size = config.word_dim,labels= config.labels,weight= weight,use_gpu = config.use_gpu)
     elif modelname == "MANNet":
         net = MANNet(vocab_size, embed_size = config.word_dim,encoder_size = 30,labels= config.labels,weight= weight,use_gpu = config.use_gpu)
+    elif modelname == "BiSRU":
+        net = BiSRU(vocab_size, embed_size = config.word_dim,encoder_size = 30,labels= config.labels,weight= weight,use_gpu = config.use_gpu)
     else:
         raise Exception("unknown model")
     train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
