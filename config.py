@@ -20,7 +20,7 @@ validate_npz = os.path.join(home,save_datafile,"validation_npz.npz")
 # The defination of cache file
 cache_file = os.path.join(home,"tmp")
 # The defination of the word embedding 
-wordembedding_file = os.path.join(home,"Word2Vec","sgns.baidubaike.bigram-char")
+wordembedding_file = os.path.join(home,"Word2Vec","sgns.zhihu.bigram-char")
 flags.DEFINE_string("mode", "train", "train/data/debug/test")
 
 # The flag Data
