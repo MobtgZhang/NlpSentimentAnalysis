@@ -18,7 +18,7 @@ def main(_):
     elif config.mode == "debug":
         train_entry("BiLSTMNet")
     elif config.mode == "test":
-        test_entry("log/model.pt")
+        test_entry()
     else:
         print("Unknown mode")
         exit(0)
