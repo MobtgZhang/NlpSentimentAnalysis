@@ -5,7 +5,7 @@ from process import train_entry,test_entry
 def main(_):
     # load embeddings
     if config.mode == "train":
-        train_entry("BiGRUNet")
+        train_entry("textCNN")
     elif config.mode == "data":
         seplength = 1000
         delay = 10
@@ -16,7 +16,7 @@ def main(_):
         # test dataset has 15000 
         preproc(config.test_file,config.test_npz,seplength,delay)
     elif config.mode == "test":
-        test_entry("BiGRUNet.pkl")
+        test_entry("textCNN")
     else:
         print("Unknown mode")
         exit(0)
