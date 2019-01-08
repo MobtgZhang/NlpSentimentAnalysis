@@ -49,10 +49,10 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
     for name, p in net.named_parameters():
         if p.requires_grad: ema.set(name, p)
     params = filter(lambda param: param.requires_grad, net.parameters())
-    optimizer = optim.Adam(lr=base_lr, betas=(config.beta1, config.beta2), eps=1e-7, weight_decay=3e-7, params=params)
+    optimizer = optim.Adam(lr=base_lr,params=params)
     cr = learning_rate / math.log2(warm_up)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: cr * math.log2(ee + 1) if ee < warm_up else learning_rate)
-
+    # scheduler = optim.lr_scheduler.StepLR(optimizer, warm_up, gamma=0.1, last_epoch=-1)
     train_set = torch.utils.data.TensorDataset(train_features, train_labels)
     validate_set = torch.utils.data.TensorDataset(validate_features, validate_labels)
     validate_iter = torch.utils.data.DataLoader(validate_set, batch_size=batch_size,shuffle=False)
@@ -159,17 +159,18 @@ def train_entry(modelname):
     train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
         vocab_size,modelname,config.num_epochs,config.batch_size,config.learning_rate)
     # draw pictures
+    pic_save_file = os.path.join(config.save_statics_file,modelname)
+
+    pic_train = os.path.join(pic_save_file,modelname+"_train"+".png")
     x1 = np.linspace(0,len(train_loss_list)-1,len(train_loss_list))
     plt.plot(x1,train_loss_list)
     plt.title('Train loss',fontsize=12)
-    num = 0
-    pic_save_file = os.path.join(config.save_statics_file,modelname)
-    pic_train = os.path.join(pic_save_file,modelname+"_train"+".png")
-    pic_validate = os.path.join(pic_save_file,modelname+"_validate"+".png")
     plt.savefig(pic_train)
+    plt.show()
+
+    pic_validate = os.path.join(pic_save_file,modelname+"_validate"+".png")
     x2 = np.linspace(0,len(validate_loss_list)-1,len(validate_loss_list))
     plt.plot(x2,validate_loss_list)
-    plt.show()
     plt.title('validate loss',fontsize=12)
     plt.savefig(pic_validate)
     plt.show()
@@ -217,10 +218,9 @@ def test_entry(modelname):
     runtime = end - start
     print('test loss: %.4f, test acc: %.2f, time: %.2f' %(test_losses.data / m, test_acc / m, runtime))
     # draw pictures
-    x = np.linspace(0,len(test_loss_list)-1,len(test_loss_list))
-    plt.plot(x,test_loss_list,label = "train loss")
-    num = 0
     pic_save_file = os.path.join(config.save_statics_file,modelname)
     pic_test = os.path.join(pic_save_file,modelname+"_test"+".png")
+    x = np.linspace(0,len(test_loss_list)-1,len(test_loss_list))
+    plt.plot(x,test_loss_list,label = "train loss")
     plt.savefig(pic_test)
     plt.show()
