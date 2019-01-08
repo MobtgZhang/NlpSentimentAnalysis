@@ -42,7 +42,7 @@ def prepare_vocab(Vocabs):
     idx_to_word,word_to_idx = MakeSets(Vocabs)
     return idx_to_word,word_to_idx
 def prepare_labels(labels):
-    scaler = preprocessing.MaxAbsScaler().fit(labels)
+    scaler = preprocessing.MinMaxScaler().fit(labels)
     return scaler
 # random creates a file for every data file
 def getRadomNum():
