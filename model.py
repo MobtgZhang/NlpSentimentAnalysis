@@ -22,13 +22,11 @@ class EMA:
             param.data.copy_(new_shadow)
             self.shadows[name] = new_shadow.to('cpu').clone()
 class BiLSTMNet(nn.Module):
-    def __init__(self, vocab_size, embed_size,weight,word_to_idx,idx_to_word,labels,
+    def __init__(self, vocab_size, embed_size,weight,labels,
             num_hiddens = 100,num_layers = 2,bidirectional = True,**kwargs):
         super(BiLSTMNet, self).__init__(**kwargs)
         self.num_hiddens = num_hiddens
         self.num_layers = num_layers
-        self.word_to_idx = word_to_idx
-        self.idx_to_word = idx_to_word
         self.bidirectional = bidirectional
         self.embedding = nn.Embedding.from_pretrained(weight)
         self.embedding.weight.requires_grad = False
@@ -49,13 +47,11 @@ class BiLSTMNet(nn.Module):
         outputs = self.sigmoid(hidden)
         return outputs
 class BiGRUNet(nn.Module):
-    def __init__(self, vocab_size, embed_size,weight,word_to_idx,idx_to_word,labels,
+    def __init__(self, vocab_size, embed_size,weight,labels,
             num_hiddens = 100,num_layers = 2,bidirectional = True,**kwargs):
         super(BiGRUNet, self).__init__(**kwargs)
         self.num_hiddens = num_hiddens
         self.num_layers = num_layers
-        self.word_to_idx = word_to_idx
-        self.idx_to_word = idx_to_word
         self.bidirectional = bidirectional
         self.embedding = nn.Embedding.from_pretrained(weight)
         self.embedding.weight.requires_grad = False
@@ -75,11 +71,9 @@ class BiGRUNet(nn.Module):
         outputs = self.sigmoid(hidden)
         return outputs
 class textCNN(nn.Module):
-    def __init__(self, vocab_size, embed_size, seq_len, labels, weight,word_to_idx,idx_to_word,**kwargs):
+    def __init__(self, vocab_size, embed_size, seq_len, labels, weight,**kwargs):
         super(textCNN, self).__init__(**kwargs)
         self.labels = labels
-        self.word_to_idx = word_to_idx
-        self.idx_to_word = idx_to_word
         self.embedding = nn.Embedding.from_pretrained(weight)
         self.embedding.weight.requires_grad = False
         self.conv1 = nn.Conv2d(1, 1, (3, embed_size))
@@ -109,12 +103,11 @@ class textCNN(nn.Module):
         return(outputs)
 # Multiway Attention Networks for Modeling Sentence Pairs
 class MANNet(nn.Module):
-    def __init__(self,vocab_size,embed_size,encoder_size,labels,word_to_idx ,idx_to_word,weight,dropout = 0.2):
+    def __init__(self,vocab_size,embed_size,encoder_size,labels,weight,dropout = 0.2):
         super(MANNet,self).__init__()
         self.drop_out = dropout
         self.labels = labels
-        self.word_to_idx = word_to_idx
-        self.idx_to_word = idx_to_word
+        self.vocab_size = vocab_size
         self.embedding = nn.Embedding.from_pretrained(weight)
         self.embedding.weight.requires_grad = False
         self.l_encoder = nn.GRU(input_size=embed_size, hidden_size=encoder_size, batch_first=True,
