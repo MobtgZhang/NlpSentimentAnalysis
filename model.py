@@ -23,11 +23,12 @@ class EMA:
             self.shadows[name] = new_shadow.to('cpu').clone()
 class BiLSTMNet(nn.Module):
     def __init__(self, vocab_size, embed_size,weight,labels,
-            num_hiddens = 100,num_layers = 2,bidirectional = True,**kwargs):
+            num_hiddens = 100,num_layers = 2,bidirectional = True,use_gpu=False,**kwargs):
         super(BiLSTMNet, self).__init__(**kwargs)
         self.num_hiddens = num_hiddens
         self.num_layers = num_layers
         self.bidirectional = bidirectional
+        self.use_gpu = use_gpu
         self.embedding = nn.Embedding.from_pretrained(weight)
         self.embedding.weight.requires_grad = False
         self.encoder = nn.LSTM(input_size=embed_size, hidden_size=self.num_hiddens,
@@ -39,22 +40,29 @@ class BiLSTMNet(nn.Module):
             self.decoder = nn.Linear(num_hiddens * 2, labels)
         self.sigmoid = nn.Sigmoid()
     def forward(self, inputs):
-        embeddings = self.embedding(inputs)
+        if self.use_gpu:
+            embeddings = self.embedding(inputs.cuda())
+        else:
+            embeddings = self.embedding(inputs)
         states, hidden = self.encoder(embeddings.permute([1, 0, 2]))
         del hidden
         encoding = torch.cat([states[0], states[-1]], dim=1)
         hidden = self.decoder(encoding)
         outputs = self.sigmoid(hidden)
-        return outputs
+        return outputs.cpu()
 class BiGRUNet(nn.Module):
-    def __init__(self, vocab_size, embed_size,weight,labels,
-            num_hiddens = 100,num_layers = 2,bidirectional = True,**kwargs):
+    def __init__(self, vocab_size, embed_size,labels,weight = None,
+            num_hiddens = 100,num_layers = 2,bidirectional = True,use_gpu=False,**kwargs):
         super(BiGRUNet, self).__init__(**kwargs)
         self.num_hiddens = num_hiddens
         self.num_layers = num_layers
+        self.use_gpu = use_gpu
+        if weight is None:
+            self.embedding = nn.Embedding(vocab_size,embed_size)
+        else:
+            self.embedding = nn.Embedding.from_pretrained(weight)
+            self.embedding.weight.requires_grad = False
         self.bidirectional = bidirectional
-        self.embedding = nn.Embedding.from_pretrained(weight)
-        self.embedding.weight.requires_grad = False
         self.encoder = nn.GRU(input_size=embed_size, hidden_size=self.num_hiddens,
                                num_layers=num_layers, bidirectional=self.bidirectional,
                                dropout=0.1)
@@ -64,16 +72,20 @@ class BiGRUNet(nn.Module):
             self.decoder = nn.Linear(num_hiddens * 2, labels)
         self.sigmoid = nn.Sigmoid()
     def forward(self, inputs):
-        embeddings = self.embedding(inputs)
+        if self.use_gpu:
+            embeddings = self.embedding(inputs.cuda())
+        else:
+            embeddings = self.embedding(inputs)
         states, hidden = self.encoder(embeddings.permute([1, 0, 2]))
         encoding = torch.cat([states[0], states[-1]], dim=1)
         hidden = self.decoder(encoding)
         outputs = self.sigmoid(hidden)
-        return outputs
+        return outputs.cpu()
 class textCNN(nn.Module):
-    def __init__(self, vocab_size, embed_size, seq_len, labels, weight,**kwargs):
+    def __init__(self, vocab_size, embed_size, seq_len, labels, weight,use_gpu=False,**kwargs):
         super(textCNN, self).__init__(**kwargs)
         self.labels = labels
+        self.use_gpu = use_gpu
         self.embedding = nn.Embedding.from_pretrained(weight)
         self.embedding.weight.requires_grad = False
         self.conv1 = nn.Conv2d(1, 1, (3, embed_size))
@@ -85,7 +97,10 @@ class textCNN(nn.Module):
         self.linear = nn.Linear(3, labels)
         self.sigmoid = nn.Sigmoid()
     def forward(self, inputs):
-        inputs = self.embedding(inputs).view(inputs.shape[0], 1, inputs.shape[1], -1)
+        if self.use_gpu:
+            inputs = self.embedding(inputs.cuda()).view(inputs.shape[0], 1, inputs.shape[1], -1)
+        else:
+            inputs = self.embedding(inputs).view(inputs.shape[0], 1, inputs.shape[1], -1)
         x1 = F.relu(self.conv1(inputs))
         x2 = F.relu(self.conv2(inputs))
         x3 = F.relu(self.conv3(inputs))
@@ -100,13 +115,14 @@ class textCNN(nn.Module):
         x = self.linear(x)
         x = x.view(-1, self.labels)
         outputs = self.sigmoid(x)
-        return(outputs)
+        return outputs.cpu()
 # Multiway Attention Networks for Modeling Sentence Pairs
 class MANNet(nn.Module):
-    def __init__(self,vocab_size,embed_size,encoder_size,labels,weight,dropout = 0.2):
+    def __init__(self,vocab_size,embed_size,encoder_size,labels,weight,dropout = 0.2,use_gpu=False):
         super(MANNet,self).__init__()
         self.drop_out = dropout
         self.labels = labels
+        self.use_gpu = use_gpu
         self.vocab_size = vocab_size
         self.embedding = nn.Embedding.from_pretrained(weight)
         self.embedding.weight.requires_grad = False
@@ -148,12 +164,21 @@ class MANNet(nn.Module):
                 nn.init.xavier_uniform_(module.weight, 0.1)
     def forward(self,inputs):
         # Encoding Layer
-        left_embedding = self.embedding(inputs)
-        right_embedding = self.embedding(inputs)
+        if self.use_gpu:
+            left_embedding = self.embedding(inputs.cuda())
+            right_embedding = self.embedding(inputs.cuda())
+        else:
+            left_embedding = self.embedding(inputs)
+            right_embedding = self.embedding(inputs)
+        
         hl,_ = self.l_encoder(left_embedding)
         hl=F.dropout(hl,self.drop_out)
         hr,_ = self.r_encoder(right_embedding)
         hr =F.dropout(hr,self.drop_out)
+
+        del left_embedding
+        del right_embedding
+        del inputs
         # print(hl.size(),hr.size())
         # Multiway Matching
         # Concat Attention
@@ -162,35 +187,60 @@ class MANNet(nn.Module):
         sjt = self.vc(torch.tanh(_s1 + _s2)).squeeze()
         ait = F.softmax(sjt, 2)
         ptc = ait.bmm(hl)
+        del sjt
+        del ait
         # print(ptc.size())
         # BiLinear Attention
         _s1 = self.Wb(hl).transpose(2, 1)
         sjt = hr.bmm(_s1)
         ait = F.softmax(sjt, 2)
         ptb = ait.bmm(hl)
+        del sjt
+        del ait
+        del _s1
         # print(ptb.size())
         # Dot Attention
         _s1 = hl.unsqueeze(1)
         _s2 = hr.unsqueeze(2)
         sjt = self.vd(torch.tanh(self.Wd(_s1 * _s2))).squeeze()
+        del _s1
+        del _s2
         ait = F.softmax(sjt, 2)
         ptd = ait.bmm(hl)
+        del sjt
+        del ait
         # print(ptd.size())
         # Minus Attention
+        _s1 = hl.unsqueeze(1)
+        _s2 = hr.unsqueeze(2)
         sjt = self.vm(torch.tanh(self.Wm(_s1 - _s2))).squeeze()
+        del _s1
+        del _s2
         ait = F.softmax(sjt, 2)
         ptm = ait.bmm(hl)
+        del sjt
+        del ait
         # print(ptm.size())
         # Weighted Sum Attention
         _s1 = hr.unsqueeze(1)
         _s2 = hr.unsqueeze(2)
         sjt = self.vs(torch.tanh(self.Ws(_s1 * _s2))).squeeze()
+        del _s1
+        del _s2
         ait = F.softmax(sjt, 2)
         pts = ait.bmm(hr)
+        del sjt
+        del ait
         # print(pts.size())
         # Inside Aggregation
         aggregation = torch.cat([hr, pts, ptc, ptd, ptb, ptm], 2)
+        del pts
+        del ptb
+        del ptc
+        del ptd
+        del ptm
         aggregation_representation, _ = self.gru_agg(aggregation)
+        del aggregation
         # print(aggregation_representation.size())
         # Mixed Aggregation
         sj = self.vp(torch.tanh(self.Wp(hl))).transpose(2, 1)
@@ -198,4 +248,17 @@ class MANNet(nn.Module):
         sj = F.softmax(self.vc(self.Wc1(aggregation_representation) + self.Wc2(rl)).transpose(2, 1), 2)
         rr = sj.bmm(aggregation_representation)
         score = torch.sigmoid(self.prediction(rr.squeeze()))
-        return score
+        del sj
+        del rl
+        del rr
+        return score.cpu()
+def main():
+    vocab_size = 500
+    embed_size = 800
+    labels = 20
+    bigrunet = BiGRUNet(vocab_size, embed_size,labels,weight = None,num_hiddens = 100,num_layers = 2,bidirectional = True)
+    x = torch.autograd.Variable(torch.LongTensor([[45,78,89],[63,56,78],[45,15,13]]))
+    out = bigrunet(x)
+    print(out)
+if __name__ == "__main__":
+    main()
