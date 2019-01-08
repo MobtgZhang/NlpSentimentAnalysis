@@ -67,8 +67,6 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
         for feature, label in tqdm(train_iter,"train: "):
             n += 1
             net.zero_grad()
-            feature = Variable(feature.cuda())
-            label = Variable(label.cuda())
             score = net(feature)
             loss = loss_function(score, label)
             loss.backward()
@@ -77,23 +75,21 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
             for name,p in net.named_parameters():
                 if p.requires_grad:ema.update_parameter(name,p)
             torch.nn.utils.clip_grad_norm_(net.parameters(),config.grad_clip)
-            t_score = train_scaler.inverse_transform(score.cpu().data.numpy())
+            t_score = train_scaler.inverse_transform(score.data.numpy())
             t_score = np.squeeze(np.ceil(t_score.reshape(1,-1))).astype(int)
-            t_label = train_scaler.inverse_transform(label.cpu().data.numpy())
+            t_label = train_scaler.inverse_transform(label.data.numpy())
             t_label = np.squeeze(t_label.reshape(1,-1)).astype(int)
 
             train_acc += accuracy_score(t_label,t_score)
             train_loss += loss
-            train_loss_list.append(loss.cpu().data.numpy().tolist())
+            train_loss_list.append(loss.data.numpy().tolist())
         with torch.no_grad():
             for validate_feature, validate_label in tqdm(validate_iter,"validate: "):
                 m += 1
-                validate_feature = validate_feature.cuda()
-                validate_label = validate_label.cuda()
                 validate_score = net(validate_feature)
                 validate_loss = loss_function(validate_score, validate_label)
-                v_score = validate_score.cpu().data.numpy()
-                v_label = validate_label.cpu().data.numpy()
+                v_score = validate_score.data.numpy()
+                v_label = validate_label.data.numpy()
 
                 v_score = validate_scaler.inverse_transform(v_score)
                 v_score = np.squeeze(np.ceil(v_score.reshape(1,-1))).astype(int)
@@ -102,7 +98,7 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
 
                 validate_acc += accuracy_score(v_label,v_score)
                 validate_losses += validate_loss
-                validate_loss_list.append(validate_loss.cpu().data.numpy().tolist())
+                validate_loss_list.append(validate_loss.data.numpy().tolist())
         end = time.time()
         runtime = end - start
         print('epoch: %d, train loss: %.4f, train acc: %.2f, validate loss: %.4f, validate acc: %.2f, time: %.2f' %
@@ -113,6 +109,7 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
         os.mkdir(save_file)
     # 保存整个网络和参数
     model_save_file = os.path.join(save_file,modelname + ".pkl")
+    net.to("cpu")
     torch.save(net,model_save_file)
     return train_loss_list,validate_loss_list
 def load_datasets(filename):
@@ -150,13 +147,13 @@ def train_entry(modelname):
     if not os.path.exists(config.save_statics_file):
         os.mkdir(config.save_statics_file)
     if modelname == "BiLSTMNet":
-        net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,weight=weight,labels=config.labels)
+        net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,weight=weight,labels=config.labels,use_gpu = config.use_gpu)
     elif modelname == "textCNN":
-        net = textCNN(vocab_size, embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels,weight= weight)
+        net = textCNN(vocab_size, embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels,weight= weight,use_gpu = config.use_gpu)
     elif modelname == "BiGRUNet":
-        net = BiGRUNet(vocab_size, embed_size = config.word_dim,labels= config.labels,weight= weight)
+        net = BiGRUNet(vocab_size, embed_size = config.word_dim,labels= config.labels,weight= weight,use_gpu = config.use_gpu)
     elif modelname == "MANNet":
-        net = MANNet(vocab_size, embed_size = config.word_dim,encoder_size = 600,labels= config.labels,weight= weight)
+        net = MANNet(vocab_size, embed_size = config.word_dim,encoder_size = 30,labels= config.labels,weight= weight,use_gpu = config.use_gpu)
     else:
         raise Exception("unknown model")
     train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
@@ -172,6 +169,7 @@ def train_entry(modelname):
     plt.savefig(pic_train)
     x2 = np.linspace(0,len(validate_loss_list)-1,len(validate_loss_list))
     plt.plot(x2,validate_loss_list)
+    plt.show()
     plt.title('validate loss',fontsize=12)
     plt.savefig(pic_validate)
     plt.show()
@@ -180,6 +178,7 @@ def test_entry(modelname):
     model_save_file = os.path.join(config.save_statics_file,modelname,modelname + ".pkl")
     if os.path.exists(model_save_file):
         net = torch.load(model_save_file)
+        net.to(config.device)
     else:
         print("There is no model in file: "+config.save_statics_file)
         return 
@@ -200,13 +199,11 @@ def test_entry(modelname):
     with torch.no_grad():
         for test_feature, test_label in tqdm(test_iter,"test: "):
             m += 1
-            test_feature = test_feature.cuda()
-            test_label = test_label.cuda()
             test_score = net(test_feature)
             test_loss = loss_function(test_score, test_label)
 
-            te_label = test_label.cpu().data.numpy()
-            te_score = test_score.cpu().data.numpy()
+            te_label = test_label.data.numpy()
+            te_score = test_score.data.numpy()
             
             te_score = test_scaler.inverse_transform(te_score)
             te_score = np.squeeze(np.round(te_score.reshape(1,-1))).astype(int)
@@ -215,7 +212,7 @@ def test_entry(modelname):
 
             test_acc += accuracy_score(te_label,te_score)
             test_losses += test_loss
-            test_loss_list.append(test_loss.cpu().data.numpy().tolist())
+            test_loss_list.append(test_loss.data.numpy().tolist())
     end = time.time()
     runtime = end - start
     print('test loss: %.4f, test acc: %.2f, time: %.2f' %(test_losses.data / m, test_acc / m, runtime))
