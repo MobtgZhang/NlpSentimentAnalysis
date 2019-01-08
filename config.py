@@ -73,7 +73,7 @@ flags.DEFINE_string("pic_testloss_savefile", pic_testloss_savefile, "")
 
 config = flags.FLAGS
 device = "cuda" if torch.cuda.is_available() else "cpu"
-use_gpu = torch.cuda.is_available()
+use_gpu = (device == "cuda")
 flags.DEFINE_boolean("use_gpu",use_gpu,"")
 flags.DEFINE_string("device", device, "")
 
