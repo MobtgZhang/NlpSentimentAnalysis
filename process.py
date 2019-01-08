@@ -28,7 +28,7 @@ def prepare_embedding(vocab_size,word_to_idx,idx_to_word):
     print("Loading word2vecs ... ...")
     wvmodel = gensim.models.KeyedVectors.load_word2vec_format(config.wordembedding_file,binary=False, encoding='utf-8')
     print("Word2vecs has been Loaded!")
-    weight = torch.zeros(vocab_size + 1,config.word_dim)
+    weight = torch.FloatTensor(np.random.randn(vocab_size + 1,config.word_dim))
     for i in range(len(wvmodel.index2word)):
         try:
             index = word_to_idx[wvmodel.index2word[i]]
@@ -40,7 +40,7 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
         vocab_size,model_save_file,num_epochs,batch_size,learning_rate):
     device = torch.device(config.device)
     net.to(device)
-    loss_function = nn.MSELoss()
+    loss_function = nn.BCELoss()
 
     base_lr = 1.0
     warm_up = config.lr_warm_up_num
@@ -78,9 +78,9 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
                 if p.requires_grad:ema.update_parameter(name,p)
             torch.nn.utils.clip_grad_norm_(net.parameters(),config.grad_clip)
             t_score = train_scaler.inverse_transform(score.cpu().data.numpy())
-            t_score = np.squeeze(np.ceil(t_score.reshape(1,-1)))
+            t_score = np.squeeze(np.ceil(t_score.reshape(1,-1))).astype(int)
             t_label = train_scaler.inverse_transform(label.cpu().data.numpy())
-            t_label = np.squeeze(t_label.reshape(1,-1))
+            t_label = np.squeeze(t_label.reshape(1,-1)).astype(int)
 
             train_acc += accuracy_score(t_label,t_score)
             train_loss += loss
@@ -96,9 +96,9 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
                 v_label = validate_scaler.inverse_transform(validate_label.cpu().data.numpy())
 
                 v_score = validate_scaler.inverse_transform(score.cpu().data.numpy())
-                v_score = np.squeeze(np.ceil(v_score.reshape(1,-1)))
+                v_score = np.squeeze(np.ceil(v_score.reshape(1,-1))).astype(int)
                 v_label = validate_scaler.inverse_transform(label.cpu().data.numpy())
-                v_label = np.squeeze(v_label.reshape(1,-1))
+                v_label = np.squeeze(v_label.reshape(1,-1)).astype(int)
 
                 validate_acc += accuracy_score(v_label,v_score)
                 validate_losses += validate_loss
@@ -128,8 +128,7 @@ def train_entry(modelname):
     Vocabs.update(Vocabs_test)
     vocab_size = len(Vocabs)
     idx_to_word,word_to_idx = prepare_vocab(Vocabs)
-    # Save vocabulary
-    np.savez(config.vocab_file,word_to_idx = word_to_idx,idx_to_word= idx_to_word)
+    np.savez(config.vocab_file,idx_to_word = idx_to_word,word_to_idx = word_to_idx)
     print("Vocabulary loaded !")
     # To bulid the datatsets
     # Train datasets
@@ -146,16 +145,19 @@ def train_entry(modelname):
     if not os.path.exists(config.save_statics_file):
         os.mkdir(config.save_statics_file)
     if modelname == "BiLSTMNet":
-        net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,weight=weight,labels=config.labels,)
+        model_save_file = os.path.join(config.save_statics_file,"BiLSTMNet.pkl")
+        net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,weight=weight,labels=config.labels)
     elif modelname == "textCNN":
-        net = textCNN(vocab_size=(vocab_size+1), embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels,weight= weight)
+        model_save_file = os.path.join(config.save_statics_file,"textCNN.pkl")
+        net = textCNN(vocab_size, embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels,weight= weight)
     elif modelname == "BiGRUNet":
-        net = BiGRUNet(vocab_size=(vocab_size+1), embed_size = config.word_dim,labels= config.labels,weight= weight)
+        model_save_file = os.path.join(config.save_statics_file,"BiGRUNet.pkl")
+        net = BiGRUNet(vocab_size, embed_size = config.word_dim,labels= config.labels,weight= weight)
     elif modelname == "MANNet":
-        net = MANNet(vocab_size=(vocab_size+1), embed_size = config.word_dim,encoder_size = 600,labels= config.labels,weight= weight)
+        model_save_file = os.path.join(config.save_statics_file,"MANNet.pkl")
+        net = MANNet(vocab_size, embed_size = config.word_dim,encoder_size = 600,labels= config.labels,weight= weight)
     else:
         raise Exception("unknown model")
-    model_save_file = os.path.join(config.save_statics_file,modelname + ".pkl")
     train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
         vocab_size,model_save_file,config.num_epochs,config.batch_size,config.learning_rate)
     # draw pictures
@@ -191,15 +193,14 @@ def train_entry(modelname):
             config.pic_validateloss_savefile = filename
             num += 1
     plt.show()
-def test_entry(filename):
+def test_entry():
     # loading model
-    if os.path.exists(filename):
-        net = torch.load(filename)
+    if os.path.exists(config.model_save_file):
+        net = torch.load(config.model_save_file)
     else:
-        print("There is no model in file: "+filename)
+        print("There is no model in file: "+config.save_statics_file)
         return 
-    data = np.load(config.vocab_file)
-    word_to_idx = data["word_to_idx"][()]
+    word_to_idx = net.word_to_idx
     # preparing test datasets
     sentences_test,labels_test = load_datasets(config.test_npz)
     test_features,test_labels,test_scaler = prepare_datasets(sentences_test,labels_test,word_to_idx,"test")
