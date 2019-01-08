@@ -166,37 +166,18 @@ def train_entry(modelname):
     plt.plot(x1,train_loss_list)
     plt.title('Train loss',fontsize=12)
     num = 0
-    while True:
-        if not os.path.exists(config.pic_trainloss_savefile):
-            plt.savefig(config.pic_trainloss_savefile)
-            break
-        else:
-            (filepath,filename) = os.path.split(config.pic_trainloss_savefile)
-            file_a = filename.split(".")[0]
-            file_b = filename.split(".")[1]
-            filename = file_a + str(num) + file_b
-            config.pic_trainloss_savefile = filename
-            num += 1
-    plt.show()
-
+    pic_save_file = os.path.join(config.save_statics_file,modelname)
+    pic_train = os.path.join(pic_save_file,modelname+"_train"+".png")
+    pic_validate = os.path.join(pic_save_file,modelname+"_validate"+".png")
+    plt.savefig(pic_train)
     x2 = np.linspace(0,len(validate_loss_list)-1,len(validate_loss_list))
     plt.plot(x2,validate_loss_list)
     plt.title('validate loss',fontsize=12)
-    while True:
-        if not os.path.exists(config.pic_validateloss_savefile):
-            plt.savefig(config.pic_validateloss_savefile)
-            break
-        else:
-            (filepath,filename) = os.path.split(config.pic_validateloss_savefile)
-            file_a = filename.split(".")[0]
-            file_b = filename.split(".")[1]
-            filename = file_a + str(num) + file_b
-            config.pic_validateloss_savefile = filename
-            num += 1
+    plt.savefig(pic_validate)
     plt.show()
-def test_entry(model_save_file):
+def test_entry(modelname):
     # loading model
-    model_save_file = os.path.join(config.save_statics_file,model_save_file)
+    model_save_file = os.path.join(config.save_statics_file,modelname,modelname + ".pkl")
     if os.path.exists(model_save_file):
         net = torch.load(model_save_file)
     else:
@@ -242,15 +223,7 @@ def test_entry(model_save_file):
     x = np.linspace(0,len(test_loss_list)-1,len(test_loss_list))
     plt.plot(x,test_loss_list,label = "train loss")
     num = 0
-    while True:
-        if not os.path.exists(config.pic_testloss_savefile):
-            plt.savefig(config.pic_testloss_savefile)
-            break
-        else:
-            (filepath,filename) = os.path.split(config.pic_testloss_savefile)
-            file_a = filename.split(".")[0]
-            file_b = filename.split(".")[1]
-            filename = file_a + str(num) + file_b
-            config.pic_testloss_savefile = filename
-            num += 1
+    pic_save_file = os.path.join(config.save_statics_file,modelname)
+    pic_test = os.path.join(pic_save_file,modelname+"_test"+".png")
+    plt.savefig(pic_test)
     plt.show()
