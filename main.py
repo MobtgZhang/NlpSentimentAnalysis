@@ -1,11 +1,12 @@
 from preproc import preproc
 from absl import app
 from config import config
-from process import train_entry,test_entry
+from process import train_entry
+from analysis import test_entry
 def main(_):
     # load embeddings
     if config.mode == "train":
-        train_entry("BiSRU")
+        train_entry("MANNet")
     elif config.mode == "data":
         seplength = 1000
         delay = 10
@@ -16,7 +17,7 @@ def main(_):
         # test dataset has 15000 
         preproc(config.test_file,config.test_npz,seplength,delay)
     elif config.mode == "test":
-        test_entry("BiSRU")
+        test_entry("MANNet")
     else:
         print("Unknown mode")
         exit(0)
