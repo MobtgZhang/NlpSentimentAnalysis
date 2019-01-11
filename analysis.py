@@ -35,8 +35,8 @@ class SentimentAnalysis:
         word_to_indexlist = self.pad_samples(self.encode_samples(sent),maxlen=1000)
         # change word to indexes
         feature = torch.autograd.Variable(torch.LongTensor(word_to_indexlist).view(1,1000))
-        score = self.SentimentModel(feature,train = False)
-        return np.around(-2 + 3*score.data.numpy())
+        score = self.SentimentModel(feature,run = False)
+        return (torch.argmax(score,dim = 1).cpu().data.numpy() - 2)
     def release(self):
         self.Sengmentor.release()
         self.ltpsplitfile = None
@@ -68,7 +68,7 @@ def collect_data(net,loadfilename,mode):
     word_to_idx = data['word_to_idx'][()]
     # preparing test datasets
     sentences_test,labels_test = load_datasets(loadfilename)
-    features,labels,scaler = prepare_datasets(sentences_test,labels_test,word_to_idx,mode)
+    features,labels = prepare_datasets(sentences_test,labels_test,word_to_idx,mode)
 
     data_set = torch.utils.data.TensorDataset(features, labels)
     data_iter = torch.utils.data.DataLoader(data_set, batch_size=config.batch_size,shuffle=False)
@@ -79,24 +79,24 @@ def collect_data(net,loadfilename,mode):
     m = 0
     list_true = []
     list_pred = []
-    loss_function = nn.BCELoss()
+    loss_function = nn.CrossEntropyLoss()
     with torch.no_grad():
         for feature, label in tqdm(data_iter,mode+": "):
             m += 1
             score = net(feature)
+            if config.use_gpu:
+                label = label.cuda()
             loss = loss_function(score, label)
 
-            label = label.data.numpy()
-            score = score.data.numpy()
+            score = torch.argmax(score,dim = 1).cpu().data.numpy()
             # append the data
-            score = scaler.inverse_transform(score)
-            list_pred.append(np.round(score).astype(int))
-            score = np.squeeze(np.round(score.reshape(-1))).astype(int)
+            list_pred.append(score.astype(int))
+            score = np.squeeze(score.reshape(-1).astype(int))
 
             # append the data
-            label = scaler.inverse_transform(label)
-            list_true.append(np.round(label).astype(int))
-            label = np.squeeze(np.round(label.reshape(-1))).astype(int)
+            label = label.cpu().data.numpy()
+            list_true.append(label.astype(int))
+            label = np.squeeze(label.reshape(-1).astype(int))
 
             accuracy += accuracy_score(label,score)
             losses += loss
