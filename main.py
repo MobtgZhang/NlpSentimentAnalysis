@@ -6,7 +6,7 @@ from analysis import test_entry
 def main(_):
     # load embeddings
     if config.mode == "train":
-        train_entry("MANNet")
+        train_entry("BiLSTMNet")
     elif config.mode == "data":
         seplength = 1000
         delay = 10
@@ -17,7 +17,7 @@ def main(_):
         # test dataset has 15000 
         preproc(config.test_file,config.test_npz,seplength,delay)
     elif config.mode == "test":
-        test_entry("MANNet")
+        test_entry("BiLSTMNet")
     else:
         print("Unknown mode")
         exit(0)
