@@ -48,8 +48,8 @@ flags.DEFINE_integer("validation_delay",500, "validation raw dataset delay time"
 flags.DEFINE_integer("test_delay",500, "test raw dataset delay time")
 
 # model definations
-flags.DEFINE_integer("num_epochs",15, "the numbers for training")
-flags.DEFINE_integer("batch_size",10, "the batchsize to seperate raw data for trainig data")
+flags.DEFINE_integer("num_epochs",6, "the numbers for training")
+flags.DEFINE_integer("batch_size",100, "the batchsize to seperate raw data for trainig data")
 flags.DEFINE_float("learning_rate",0.8, "the learningrate for trainig data")
 flags.DEFINE_integer("lr_warm_up_num", 1000, "Number of warm-up steps of learning rate")
 flags.DEFINE_float("grad_clip", 5.0, "Global Norm gradient clipping rate")
