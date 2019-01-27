@@ -116,7 +116,7 @@ class BiLSTMNet(nn.Module):
         bjt = self.Wb(ajt) # btc*first_labels*second_labels
         ojt = self.Wc(bjt.permute([0,2,1])).permute([0,2,1])# btc*statement_labels*second_labels
         predict = F.softmax(ojt,dim = 1)
-        return predict
+        return predict.cpu()
 class textCNN(nn.Module):
     def __init__(self, vocab_size, embed_size,weight=None,seq_len = 1000,first_labels = 6,second_labels = 20,
             statement_labels = 4,num_layers = 2,bidirectional = True,use_gpu=False,**kwargs):
