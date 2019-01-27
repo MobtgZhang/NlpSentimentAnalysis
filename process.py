@@ -15,15 +15,15 @@ import math
 from tqdm import tqdm
 from utils import GetVocabs,MakeSets,encode_samples,pad_samples,prepare_vocab,prepare_labels
 from config import config
-from model import BiLSTMNet,textCNN,BiGRUNet,EMA,MANNet
+from model import BiLSTMNet,textCNN,BiGRUNet,EMA
 
 def prepare_datasets(sentences,labels,word_to_idx,mode):
     print("Preparing "+mode+" datasets ... ...")
     features = torch.LongTensor(pad_samples(encode_samples(sentences,word_to_idx),config.text_length))
-    scaler = prepare_labels(labels)
-    labels = torch.FloatTensor(scaler.transform(labels))
+    labels = prepare_labels(labels)
+    labels = torch.LongTensor(labels)
     print("The "+mode+" datasets has been loaded!")
-    return features,labels,scaler
+    return features,labels
 def prepare_embedding(vocab_size,word_to_idx,idx_to_word):
     print("Loading word2vecs ... ...")
     wvmodel = gensim.models.KeyedVectors.load_word2vec_format(config.wordembedding_file,binary=False, encoding='utf-8')
@@ -36,11 +36,11 @@ def prepare_embedding(vocab_size,word_to_idx,idx_to_word):
             continue
         weight[index, :] = torch.from_numpy(wvmodel.get_vector(idx_to_word[word_to_idx[wvmodel.index2word[i]]]))
     return weight
-def prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
+def prepare_train(train_features,train_labels,validate_features,validate_labels,weight,net,
         vocab_size,modelname,num_epochs,batch_size,learning_rate):
     device = torch.device(config.device)
     net.to(device)
-    loss_function = nn.BCELoss()
+    loss_function = nn.CrossEntropyLoss()
 
     base_lr = 1.0
     warm_up = config.lr_warm_up_num
@@ -69,6 +69,8 @@ def prepare_train(train_features,train_labels,validate_features,validate_labels,
             n += 1
             net.zero_grad()
             score = net(feature)
+            print(score)
+            print(label)
             loss = loss_function(score, label)
             loss.backward()
             optimizer.step()
@@ -144,10 +146,10 @@ def train_entry(modelname):
     # Train datasets
     print("Preparing datasets ...")
     sentences_train,labels_train = load_datasets(config.train_npz)
-    train_features,train_labels,train_scaler = prepare_datasets(sentences_train,labels_train,word_to_idx,"train")
+    train_features,train_labels = prepare_datasets(sentences_train,labels_train,word_to_idx,"train")
     
     sentences_validate,labels_validate = load_datasets(config.validate_npz)
-    validate_features,validate_labels,validate_scaler = prepare_datasets(sentences_validate,labels_validate,word_to_idx,"validate")
+    validate_features,validate_labels = prepare_datasets(sentences_validate,labels_validate,word_to_idx,"validate")
 
     # To make the embeddings
     weight = prepare_embedding(vocab_size,word_to_idx,idx_to_word)
@@ -155,16 +157,14 @@ def train_entry(modelname):
     if not os.path.exists(config.save_statics_file):
         os.mkdir(config.save_statics_file)
     if modelname == "BiLSTMNet":
-        net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,weight=weight,labels=config.labels,use_gpu = config.use_gpu)
+        net = BiLSTMNet(vocab_size=(vocab_size+1), embed_size=config.word_dim,weight=weight,use_gpu = config.use_gpu)
     elif modelname == "textCNN":
         net = textCNN(vocab_size, embed_size = config.word_dim, seq_len = config.text_length, labels= config.labels,weight= weight,use_gpu = config.use_gpu)
     elif modelname == "BiGRUNet":
         net = BiGRUNet(vocab_size, embed_size = config.word_dim,labels= config.labels,weight= weight,use_gpu = config.use_gpu)
-    elif modelname == "MANNet":
-        net = MANNet(vocab_size, embed_size = config.word_dim,encoder_size = 30,labels= config.labels,weight= weight,use_gpu = config.use_gpu)
     else:
         raise Exception("unknown model:" + modelname)
-    train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,train_scaler,validate_scaler,weight,net,
+    train_loss_list,validate_loss_list = prepare_train(train_features,train_labels,validate_features,validate_labels,weight,net,
         vocab_size,modelname,config.num_epochs,config.batch_size,config.learning_rate)
     # draw pictures
     pic_save_file = os.path.join(config.save_statics_file,modelname)
