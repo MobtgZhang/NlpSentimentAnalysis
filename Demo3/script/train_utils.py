@@ -3,7 +3,9 @@ import subprocess
 import logging
 logger = logging.getLogger()
 
-import config
+from utils import config
+import utils.util as util
+from model.model import DocReader
 
 def str2bool(v):
     return v.lower() in ('yes', 'true', 't', '1', 'y')
@@ -30,6 +32,8 @@ def add_train_args(parser):
                          help='Train data iterations')
     runtime.add_argument('--batch-size', type=int, default=45,
                          help='Batch size for training')
+    runtime.add_argument('--dev-batch-size', type=int, default=32,
+                         help='Batch size during validation/testing')
     runtime.add_argument('--test-batch-size', type=int, default=32,
                          help='Batch size during validation/testing')
     # Files
@@ -146,4 +150,32 @@ def set_defaults(args):
                            'as embeddings are random.')
             args.fix_embeddings = False
     return args
+def init_from_scratch(args, train_exs, dev_exs,test_exs):
+    """New model, new data, new dictionary."""
+    # Create a feature dict out of the annotations in the data
+    logger.info('-' * 100)
+    logger.info('Generate features')
+    feature_dict = util.build_feature_dict(args, train_exs)
+    logger.info('Num features = %d' % len(feature_dict))
+    logger.info(feature_dict)
+    # Build a dictionary from the data questions + documents (train/dev splits)
+    logger.info('-' * 100)
+    logger.info('Build word dictionary')
+    word_dict = util.build_word_dict(args, train_exs + dev_exs + test_exs)
+    logger.info('Num words = %d' % len(word_dict))
+    # Build a char dictionary from the data questions + documents (train/dev splits)
+    logger.info('-' * 100)
+    logger.info('Build char dictionary')
+    char_dict = util.build_char_dict(args, train_exs + dev_exs + test_exs)
+    logger.info('Num chars = %d' % len(char_dict))
 
+    # Initialize model
+    model = DocReader(config.get_model_args(args), word_dict, char_dict, feature_dict)
+
+    # Load pretrained embeddings for words in dictionary
+    if args.words_embedding_file:
+        model.load_embeddings(word_dict.tokens(), args.words_embedding_file)
+    if args.char_embedding_file:
+        model.load_char_embeddings(char_dict.tokens(), args.char_embedding_file)
+
+    return model

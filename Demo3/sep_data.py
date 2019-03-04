@@ -1,7 +1,7 @@
 import os
 import argparse
 
-from config import DATA_DIR,OUT_DIR
+from utils.config import DATA_DIR,OUT_DIR
 from script.preprocess import preparing_raw
 def main():
     parser = argparse.ArgumentParser()
@@ -11,6 +11,8 @@ def main():
     args = parser.parse_args()
     out_file = "raw_%s.csv" % args.type
     save_file = os.path.join(args.out_dir, out_file)
+    if not os.path.exists(args.out_dir):
+        os.mkdir(args.out_dir)
     if os.path.exists(save_file):
         print("file: "+save_file+" exists!")
     else:

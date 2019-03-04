@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 from .tokenizer import JieBaTokenizer,LtpTokenizer
 
-from config import LTP_MODEL_PATH,ANNTOTORS
+from utils.config import LTP_MODEL_PATH,ANNTOTORS
 def init(tokenizer):
     global TOK
     if tokenizer == "jieba":
@@ -77,7 +77,7 @@ def load_dataset(path):
     return output
 def prepare_embeddings(args):
 
-    sentences = Text8Corpus(args.sep_AI_RAW)
+    sentences = Text8Corpus(args.sep_raw)
     model = Word2Vec(sentences=sentences,
                          sg=args.sg,
                          size=args.emb_size,
