@@ -1,4 +1,5 @@
 import json
+import time
 from collections import Counter
 import logging
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ def load_data(args,filename):
                 num +=1
                 if num >= 30000:
                     break
+
     return examples
 def load_words(args, examples):
     """Iterate and index all the words in examples (documents + questions)."""
@@ -131,3 +133,81 @@ def top_words(args, examples, word_dict):
             if w in word_dict:
                 word_count.update([w])
     return word_count.most_common(args.tune_partial)
+# ------------------------------------------------------------------------------
+# Utility classes
+# ------------------------------------------------------------------------------
+
+
+class AverageMeter(object):
+    """Computes and stores the average and current value."""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+class Timer(object):
+    """Computes elapsed time."""
+
+    def __init__(self):
+        self.running = True
+        self.total = 0
+        self.start = time.time()
+
+    def reset(self):
+        self.running = True
+        self.total = 0
+        self.start = time.time()
+        return self
+
+    def resume(self):
+        if not self.running:
+            self.running = True
+            self.start = time.time()
+        return self
+
+    def stop(self):
+        if self.running:
+            self.running = False
+            self.total += time.time() - self.start
+        return self
+
+    def time(self):
+        if self.running:
+            return self.total + time.time() - self.start
+        return self.total
+class DataSaver(object):
+    """save every epoch datas."""
+    def __init__(self,data_file):
+        self.data_list = []
+        self.data_file = data_file
+    def add(self,val):
+        val = float(val)
+        self.data_list.append(val)
+    def save(self):
+        with open(self.data_file,mode="w",encoding="utf-8") as file:
+            for value in self.data_list:
+                file.write(str(value) + "\n")
+        logger.info("saved file: %s"% self.data_file)
+class GlobalSaver(object):
+    """save global data """
+    def __init__(self,model_name,type):
+        self.loss_saver = DataSaver(model_name + "_"+type+".loss")
+        self.f1_saver = DataSaver(model_name + "_"+type+".f1")
+        self.acc_saver = DataSaver(model_name + "_"+type+".acc")
+        self.em_saver = DataSaver(model_name + "_"+type+".em")
+    def save(self):
+        self.loss_saver.save()
+        self.f1_saver.save()
+        self.acc_saver.save()
+        self.em_saver.save()

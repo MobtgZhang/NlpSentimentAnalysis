@@ -1,7 +1,11 @@
 import logging
+import copy
 logger = logging.getLogger(__name__)
 import torch
+import torch.nn as nn
 import torch.optim as optim
+from torch.autograd import Variable
+import torch.nn.functional as F
 from gensim.models.word2vec import Word2Vec
 
 
@@ -55,7 +59,6 @@ class DocReader(object):
                 self.network.register_buffer('fixed_embedding', fixed_embedding)
             else:
                 self.network.load_state_dict(state_dict)
-
     def expand_dictionary(self, words):
         """Add words to the DocReader dictionary if they do not exist. The
         underlying embedding matrix is also expanded (with random embeddings).
@@ -259,7 +262,130 @@ class DocReader(object):
         else:
             raise RuntimeError('Unsupported optimizer: %s' %
                                self.args.optimizer)
+    # --------------------------------------------------------------------------
+    # Learning
+    # --------------------------------------------------------------------------
 
+    def update(self, ex):
+        """Forward a batch of examples; step the optimizer to update weights."""
+        if not self.optimizer:
+            raise RuntimeError('No optimizer set.')
+
+        # Train mode
+        self.network.train()
+        # Transfer to GPU
+        # ex : x,x_c,x_f,x_mask,targets
+        if self.use_cuda:
+            inputs = [e if e is None else Variable(e.cuda(async=True)) for e in ex[:-1]]
+            targets =  Variable(ex[-1].cuda(async=True))
+        else:
+            inputs = [e if e is None else Variable(e) for e in ex[:-1]]
+            targets = Variable(ex[-1])
+        # Run forward
+        score = self.network(*inputs)
+
+        # Compute loss and accuracies
+        loss = F.cross_entropy(score,targets)
+
+        # Clear gradients and run backward
+        self.optimizer.zero_grad()
+        loss.backward()
+
+        # Clip gradients
+        torch.nn.utils.clip_grad_norm(self.network.parameters(),
+                                      self.args.grad_clipping)
+
+        # Update parameters
+        self.optimizer.step()
+        self.updates += 1
+
+        # Reset any partially fixed parameters (e.g. rare words)
+        self.reset_parameters()
+
+        return loss.data
+
+    def reset_parameters(self):
+        """Reset any partially fixed parameters to original states."""
+
+        # Reset fixed embeddings to original value
+        if self.args.tune_partial > 0:
+            # Embeddings to fix are indexed after the special + N tuned words
+            offset = self.args.tune_partial + self.word_dict.START
+            if self.parallel:
+                embedding = self.network.module.embedding.weight.data
+                fixed_embedding = self.network.module.fixed_embedding
+            else:
+                embedding = self.network.embedding.weight.data
+                fixed_embedding = self.network.fixed_embedding
+            if offset < embedding.size(0):
+                embedding[offset:] = fixed_embedding
+    # --------------------------------------------------------------------------
+    # Prediction
+    # --------------------------------------------------------------------------
+
+    def predict(self, ex,async_pool = None):
+        """Forward a batch of examples only to get predictions.
+
+        Args:
+            ex: the batch
+        Output:
+            scores: batch * fine_second_size * class_number predict matrix
+            targets: batch * fine_second_size  labeled data
+        If async_pool is given, these will be AsyncResult handles.
+        """
+        # Eval mode
+        self.network.eval()
+
+        # Transfer to GPU
+        if self.use_cuda:
+            inputs = [e if e is None else Variable(e.cuda(async=True)) for e in ex[:-1]]
+            targets = Variable(ex[-1].cuda(async=True))
+        else:
+            inputs = [e if e is None else Variable(e) for e in ex[:-1]]
+            targets = Variable(ex[-1])
+
+        # Run forward
+        scores = self.network(*inputs)
+        del inputs
+
+        # Decode predictions
+        scores = scores.data.cpu()
+        targets = targets.data.cpu()
+        return scores,targets
+    # --------------------------------------------------------------------------
+    # Saving and loading
+    # --------------------------------------------------------------------------
+
+    def save(self, filename):
+        state_dict = copy.copy(self.network.state_dict())
+        if 'fixed_embedding' in state_dict:
+            state_dict.pop('fixed_embedding')
+        params = {
+            'state_dict': state_dict,
+            'word_dict': self.word_dict,
+            'char_dict': self.char_dict,
+            'feature_dict': self.feature_dict,
+            'args': self.args,
+        }
+        try:
+            torch.save(params, filename)
+        except BaseException:
+            logger.warning('WARN: Saving failed... continuing anyway.')
+
+    def checkpoint(self, filename, epoch):
+        params = {
+            'state_dict': self.network.state_dict(),
+            'word_dict': self.word_dict,
+            'char_dict': self.char_dict,
+            'feature_dict': self.feature_dict,
+            'args': self.args,
+            'epoch': epoch,
+            'optimizer': self.optimizer.state_dict(),
+        }
+        try:
+            torch.save(params, filename)
+        except BaseException:
+            logger.warning('WARN: Saving failed... continuing anyway.')
     @staticmethod
     def load(filename, new_args=None, normalize=True):
         logger.info('Loading model %s' % filename)

@@ -2,11 +2,12 @@ import os
 import subprocess
 import logging
 logger = logging.getLogger()
-
+import torch
+from sklearn.metrics import f1_score,accuracy_score
 from utils import config
 import utils.util as util
 from model.model import DocReader
-
+import torch.nn.functional as F
 def str2bool(v):
     return v.lower() in ('yes', 'true', 't', '1', 'y')
 def add_train_args(parser):
@@ -30,7 +31,7 @@ def add_train_args(parser):
                                'operations (for reproducibility)'))
     runtime.add_argument('--num-epochs', type=int, default=40,
                          help='Train data iterations')
-    runtime.add_argument('--batch-size', type=int, default=45,
+    runtime.add_argument('--batch-size', type=int, default=15,
                          help='Batch size for training')
     runtime.add_argument('--dev-batch-size', type=int, default=32,
                          help='Batch size during validation/testing')
@@ -150,6 +151,83 @@ def set_defaults(args):
                            'as embeddings are random.')
             args.fix_embeddings = False
     return args
+# ------------------------------------------------------------------------------
+# Validation loops. Includes both "unofficial" and "official" functions that
+# use different metrics and implementations.
+# ------------------------------------------------------------------------------
+
+
+def validate_official(args, data_loader, model, global_stats,saver,mode):
+    """Run one full unofficial validation.
+    Unofficial = doesn't use SQuAD script.
+    """
+    eval_time = util.Timer()
+    f1_score_avg = util.AverageMeter()
+    accuracy_score_avg = util.AverageMeter()
+    exact_match = util.AverageMeter()
+
+    # Make predictions
+    examples = 0
+    for ex in data_loader:
+        batch_size = ex[0].size(0)
+        scores,targets = model.predict(ex)
+        loss = F.cross_entropy(scores,targets)
+        predicts = torch.argmax(scores,dim=1)
+        # We get metrics for independent start/end and joint start/end
+        accuracies = eval_accuracies(predicts,targets)
+        f1_score_avg.update(accuracies[0], batch_size)
+        accuracy_score_avg.update(accuracies[1], batch_size)
+        exact_match.update(accuracies[2],batch_size)
+
+        # If getting train accuracies, sample max 10k
+        examples += batch_size
+        if mode == 'train' and examples >= 1e4:
+            break
+    saver.loss_saver.add(loss.data)
+    saver.f1_saver.add(f1_score_avg.avg)
+    saver.acc_saver.add(accuracy_score_avg.avg)
+    saver.em_saver.add(exact_match.avg)
+    logger.info('%s valid unofficial: Epoch = %d | f1_score = %.2f | ' %
+                (mode, global_stats['epoch'], f1_score_avg.avg) +
+                'accuracy_score = %.2f | exact = %.2f | examples = %d | ' %
+                (accuracy_score_avg.avg, exact_match.avg, examples) +
+                'valid time = %.2f (s)' % eval_time.time())
+    return {'exact_match': exact_match.avg}
+
+def eval_accuracies(predicts,targets,average="macro"):
+
+    """An unofficial evalutation helper.
+    Compute exact predicts,targets match accuracies for a batch.
+    type: binary,micro,macro
+    """
+    # Convert 1D tensors to lists of lists (compatibility)
+    if torch.is_tensor(predicts):
+        predicts = predicts.data.numpy()
+        targets = targets.data.numpy()
+    shape = predicts.shape
+    batch_size = shape[0]
+    class_number = shape[1]
+    f1 = util.AverageMeter()
+    em = util.AverageMeter()
+    acc = util.AverageMeter()
+    for k in range(class_number):
+        y_pred = predicts[:, k:k + 1].squeeze()
+        y_true = targets[:, k:k + 1].squeeze()
+        # f1_score matches
+        f1_val = f1_score(y_true, y_pred, average=average)
+        f1.update(f1_val)
+        # accuracy matches
+        acc_val = accuracy_score(y_true, y_pred)
+        acc.update(acc_val)
+        # extract match
+        for k in range(batch_size):
+            for _p, _t in zip(y_pred,y_true):
+                if _p == _t:
+                    em.update(1)
+                else:
+                    em.update(0)
+    return f1.avg * 100, acc.avg * 100, em.avg * 100
+
 def init_from_scratch(args, train_exs, dev_exs,test_exs):
     """New model, new data, new dictionary."""
     # Create a feature dict out of the annotations in the data
@@ -179,3 +257,30 @@ def init_from_scratch(args, train_exs, dev_exs,test_exs):
         model.load_char_embeddings(char_dict.tokens(), args.char_embedding_file)
 
     return model
+# ------------------------------------------------------------------------------
+# Train loop.
+# ------------------------------------------------------------------------------
+
+
+def train(args, data_loader, model, global_stats,train_saver):
+    """Run through one epoch of model training with the provided data loader."""
+    # Initialize meters + timers
+    train_loss = util.AverageMeter()
+    epoch_time = util.Timer()
+
+    # Run one epoch
+    for idx, ex in enumerate(data_loader):
+        train_loss.update(model.update(ex))
+        if idx % args.display_iter == 0:
+            logger.info('train: Epoch = %d | iter = %d/%d | ' %
+                        (global_stats['epoch'], idx, len(data_loader)) +
+                        'loss = %.4f | elapsed time = %.2f (s)' %
+                        (train_loss.avg, global_stats['timer'].time()))
+            train_loss.reset()
+    logger.info('train: Epoch %d done. Time for epoch = %.2f (s)' %
+                (global_stats['epoch'], epoch_time.time()))
+
+    # Checkpoint
+    if args.checkpoint:
+        model.checkpoint(args.model_file + '.checkpoint',
+                         global_stats['epoch'] + 1)

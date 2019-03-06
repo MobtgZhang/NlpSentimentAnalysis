@@ -15,15 +15,19 @@ import pyltp as ltp
 logging.basicConfig(level = logging.INFO,format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-from .tokenizer import JieBaTokenizer,LtpTokenizer
+from .tokenizer import JieBaTokenizer,LtpTokenizer,StanfordcorenlpTokenizer
 
-from utils.config import LTP_MODEL_PATH,ANNTOTORS
+from utils.config import LTP_MODEL_PATH,ANNTOTORS,SFD_MODEL_PATH
 def init(tokenizer):
     global TOK
     if tokenizer == "jieba":
         TOK = JieBaTokenizer(annotators=ANNTOTORS)
     elif tokenizer == "pyltp":
         TOK = LtpTokenizer(annotators=ANNTOTORS,model_path=LTP_MODEL_PATH)
+    elif tokenizer == "stanfordnlp":
+        TOK = StanfordcorenlpTokenizer(annotators=ANNTOTORS,model_path=SFD_MODEL_PATH)
+    else:
+        raise Exception("Unknown tokenizer: " + tokenizer)
     Finalize(TOK, TOK.shutdown, exitpriority=100)
 def tokenize(text):
     """Call the global process tokenizer on the input text."""

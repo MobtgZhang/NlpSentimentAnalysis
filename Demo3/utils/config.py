@@ -12,12 +12,14 @@ EMBED_DIR = os.path.join(home,"data","embeddings")
 MODEL_DIR = os.path.join(home,"data","models","checkpoints","logs")
 ANNTOTORS = {"pos","ner"}
 LTP_MODEL_PATH = "/media/asus/OSHDD/Datas/ltp_data_v3.4.0"
+SFD_MODEL_PATH = "/media/asus/OSHDD/Datas/stanford-chinese-corenlp-2018-10-05-models/stanford-corenlp"
+
 
 # Index of arguments concerning the core model architecture
 MODEL_ARCHITECTURE = {
     'model_type', 'embedding_dim', 'char_embedding_dim', 'hidden_size', 'char_hidden_size',
-    'doc_layers', 'question_layers', 'rnn_type', 'concat_rnn_layers', 'question_merge',
-    'use_qemb', 'use_exact_match', 'use_pos', 'use_ner', 'use_lemma', 'use_tf', 'hop'
+    'doc_layers', 'rnn_type', 'concat_rnn_layers','use_exact_match', 'use_pos', 'use_ner', 'use_tf', 'hop',
+    "first_grained_size","second_grained_size","class_size"
 }
 
 # Index of arguments concerning the model optimizer/training
@@ -36,7 +38,7 @@ def add_model_args(parser):
 
     # Model architecture
     model = parser.add_argument_group('Reader Model Architecture')
-    model.add_argument('--model-type', type=str, default='mnemonic',
+    model.add_argument('--model-type', type=str, default='r_net',
                        help='Model architecture type: rnn, r_net, mnemonic')
     model.add_argument('--embedding-dim', type=int, default=300,
                        help='Embedding size if embedding_file is not given')
@@ -44,12 +46,16 @@ def add_model_args(parser):
                        help='Embedding size if char_embedding_file is not given')
     model.add_argument('--hidden-size', type=int, default=100,
                        help='Hidden size of RNN units')
+    model.add_argument('--first-grained-size', type=int, default=6,
+                       help='The first layer of fine-grained affective analysis')
+    model.add_argument('--second-grained-size', type=int, default=20,
+                       help='The second layer of fine-grained affective analysis')
+    model.add_argument('--class-size', type=int, default=4,
+                       help='The class size of affective analysis')
     model.add_argument('--char-hidden-size', type=int, default=50,
                        help='Hidden size of char RNN units')
-    model.add_argument('--doc-layers', type=int, default=3,
+    model.add_argument('--doc-layers', type=int, default=2,
                        help='Number of encoding layers for document')
-    model.add_argument('--question-layers', type=int, default=3,
-                       help='Number of encoding layers for question')
     model.add_argument('--rnn-type', type=str, default='lstm',
                        help='RNN type: LSTM, GRU, or RNN')
 
@@ -57,8 +63,6 @@ def add_model_args(parser):
     detail = parser.add_argument_group('Reader Model Details')
     detail.add_argument('--concat-rnn-layers', type='bool', default=True,
                         help='Combine hidden states from each encoding layer')
-    detail.add_argument('--question-merge', type=str, default='self_attn',
-                        help='The way of computing the question representation')
     detail.add_argument('--use-qemb', type='bool', default=True,
                         help='Whether to use weighted question embeddings')
     detail.add_argument('--use-exact-match', type='bool', default=True,

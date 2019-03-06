@@ -4,11 +4,13 @@ import numpy as np
 import torch
 
 import logging
+logger = logging.getLogger(__name__)
 import sys
 import os
+import json
 
 from script.train_utils import add_train_args,set_defaults,init_from_scratch
-from script.train_utils import logger
+from script.train_utils import train,validate_official
 from model.model import DocReader
 import utils.data as data
 from utils import config
@@ -25,7 +27,6 @@ def main(args):
     logger.info('-' * 100)
     logger.info('Load data files')
     train_exs = util.load_data(args,args.train_file)
-
     logger.info('Num train examples = %d' % len(train_exs))
     dev_exs = util.load_data(args,args.dev_file)
     logger.info('Num dev examples = %d' % len(dev_exs))
@@ -96,9 +97,6 @@ def main(args):
     # Three datasets: train and dev. If we sort by length it's faster.
     logger.info('-' * 100)
     logger.info('Make data loaders')
-
-
-
     train_dataset = data.ReaderDataset(train_exs, model)
 
     if args.sort_by_len:
@@ -113,7 +111,7 @@ def main(args):
         sampler=train_sampler,
         num_workers=args.data_workers,
         collate_fn=vector.batchify,
-        pin_memory=args.cuda,
+        #pin_memory= args.cuda,
     )
     dev_dataset = data.ReaderDataset(dev_exs, model)
     if args.sort_by_len:
@@ -128,24 +126,40 @@ def main(args):
         sampler=dev_sampler,
         num_workers=args.data_workers,
         collate_fn=vector.batchify,
-        pin_memory=args.cuda,
+        #pin_memory=args.cuda,
     )
-    test_dataset = data.ReaderDataset(test_exs, model)
-    if args.sort_by_len:
-        test_sampler = data.SortedBatchSampler(test_dataset.lengths(),
-                                              args.test_batch_size,
-                                              shuffle=False)
-    else:
-        test_sampler = torch.utils.data.sampler.SequentialSampler(test_dataset)
-    test_loader = torch.utils.data.DataLoader(
-        dev_dataset,
-        batch_size=args.test_batch_size,
-        sampler=test_sampler,
-        num_workers=args.data_workers,
-        collate_fn=vector.batchify,
-        pin_memory=args.cuda,
-    )
+    # -------------------------------------------------------------------------
+    # PRINT CONFIG
+    logger.info('-' * 100)
+    logger.info('CONFIG:\n%s' %
+                json.dumps(vars(args), indent=4, sort_keys=True))
+    # --------------------------------------------------------------------------
+    # TRAIN/VALID LOOP
+    logger.info('-' * 100)
+    logger.info('Starting training...')
+    stats = {'timer': util.Timer(), 'epoch': 0, 'best_valid': 0}
+    train_saver = util.GlobalSaver(args.model_name, "train")
+    dev_saver = util.GlobalSaver(args.model_name, "dev")
+    for epoch in range(start_epoch, args.num_epochs):
+        stats['epoch'] = epoch
+        # Train
+        train(args, train_loader, model, stats,train_saver)
 
+        # Validate unofficial (train)
+        validate_official(args, train_loader, model, stats, train_saver,mode='train')
+
+        # Validate unofficial (dev)
+        result = validate_official(args, dev_loader, model, stats,dev_saver,mode='dev')
+
+        # Save best valid
+        if args.valid_metric is None or args.valid_metric == 'None':
+            model.save(args.model_file)
+        elif result[args.valid_metric] > stats['best_valid']:
+            logger.info('Best valid: %s = %.2f (epoch %d, %d updates)' %
+                        (args.valid_metric, result[args.valid_metric],
+                         stats['epoch'], model.updates))
+            model.save(args.model_file)
+            stats['best_valid'] = result[args.valid_metric]
 if __name__ == '__main__':
     # Parse cmdline args and setup environment
     parser = argparse.ArgumentParser(

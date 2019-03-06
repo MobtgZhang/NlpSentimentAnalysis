@@ -1,4 +1,5 @@
 from collections import Counter
+import numpy as np
 import torch
 
 
@@ -12,6 +13,11 @@ def vectorize(ex, model):
     # Index words
     document = torch.LongTensor([word_dict[w] for w in ex['document']])
     document_char = [torch.LongTensor([char_dict[c] for c in cs]) for cs in ex['document_char']]
+
+    # Index labels
+    labels = np.array(ex['labels'],dtype=int)
+    labels = labels + np.ones(labels.shape)*2
+    targets = torch.LongTensor(labels)
 
     # Create extra features vector
     if len(feature_dict) > 0:
@@ -39,18 +45,17 @@ def vectorize(ex, model):
         l = len(ex['document'])
         for i, w in enumerate(ex['document']):
             c_features[i][feature_dict['tf']] = counter[w.lower()] * 1.0 / l
-
-    return document, document_char, c_features
+    return document, document_char, c_features,targets
 
 def batchify(batch):
     """Gather a batch of individual examples into one batch."""
-    NUM_INPUTS = 6
-    NUM_TARGETS = 20
-    NUM_EXTRA = 0
 
     docs = [ex[0] for ex in batch]
     doc_chars = [ex[1] for ex in batch]
     c_features = [ex[2] for ex in batch]
+    targets = [ex[3].reshape((1,ex[3].size(0))) for ex in batch]
+
+    targets = torch.cat(targets,dim=-2)
 
     # Batch documents and features
     max_length = max([d.size(0) for d in docs])
@@ -59,6 +64,7 @@ def batchify(batch):
     x = torch.LongTensor(len(docs), max_length).zero_()
     x_c = torch.LongTensor(len(docs), max_length, max_char_length).zero_()
     x_mask = torch.ByteTensor(len(docs), max_length).fill_(1)
+
     if c_features[0] is None:
         x_f = None
     else:
@@ -72,23 +78,4 @@ def batchify(batch):
         for j, c in enumerate(cs):
             c_ = c[:max_char_length]
             x_c[i, j, :c_.size(0)].copy_(c_)
-
-
-
-
-    # Maybe return without targets
-    if len(batch[0]) == NUM_INPUTS + NUM_EXTRA:
-        return x, x_c, x_f, x_mask
-
-    elif len(batch[0]) == NUM_INPUTS + NUM_EXTRA + NUM_TARGETS:
-        # ...Otherwise add targets
-        if torch.is_tensor(batch[0][NUM_INPUTS]):
-            y_s = torch.cat([ex[NUM_INPUTS] for ex in batch])
-            y_e = torch.cat([ex[NUM_INPUTS+1] for ex in batch])
-        else:
-            y_s = [ex[NUM_INPUTS] for ex in batch]
-            y_e = [ex[NUM_INPUTS+1] for ex in batch]
-    else:
-        raise RuntimeError('Incorrect number of inputs per example.')
-
-    return x, x_c, x_f, x_mask
+    return x, x_c, x_f, x_mask,targets

@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--sep_raw",default="",type=str,help="raw data embedding file training")
     parser.add_argument('--num-workers', type=int, default=4)
     parser.add_argument('--tokenizer', type=str, default='pyltp')
-    parser.add_argument('--sg', default=0, type=int, help='0 for COBW or 1 for SkipGram')
+    parser.add_argument('--sg', default=1, type=int, help='0 for COBW or 1 for SkipGram')
     args = parser.parse_args()
     if args.split in ["train","test","validation"]:
         out_file = os.path.join(args.out_dir, '%s-processed-%s.json' % (args.split, args.tokenizer))

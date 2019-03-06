@@ -2,6 +2,7 @@ import copy
 import os
 import pyltp as ltp
 import jieba.posseg as posseg
+from stanfordcorenlp import StanfordCoreNLP
 class Tokens(object):
     """A class to represent a list of tokenized text."""
     TEXT = 0
@@ -135,6 +136,48 @@ class JieBaTokenizer(object):
                 list(w.word),
                 w.flag,
                 ""
+            ))
+        # Set special option for non-entity tag: '' vs 'O' in spaCy
+        return Tokens(data, self.annotators, opts={'non_ent': ''})
+
+    def shutdown(self):
+        pass
+
+    def __del__(self):
+        self.shutdown()
+class StanfordcorenlpTokenizer(object):
+    def __init__(self,annotators,model_path, **kwargs):
+        """
+        Args:
+            annotators: set that can include pos, lemma, and ner.
+            model: Stanfordcorenlp model to use .
+        """
+        self.annotators = annotators
+        self.nlp = StanfordCoreNLP(model_path,lang='zh',memory="2g")
+        self.model_path = model_path
+    def tokenize(self, text):
+        # We don't treat new lines as tokens.
+        clean_text = text.replace('\n', ' ')
+
+        # segment and postag the words
+        seg_list = self.nlp.word_tokenize(clean_text)
+        # postag the words
+        pos_list = self.nlp.pos_tag(clean_text)
+        # ner recognition
+        ner_list = self.nlp.ner(clean_text)
+        # Constituency Parsing
+        #con_list = self.nlp.parse(clean_text)
+        # dependency parse
+        #dep_list = self.nlp.dependency_parse(clean_text)
+
+        data = []
+        for k in range(len(seg_list)):
+            # Get whitespace
+            data.append((
+                seg_list[k],
+                list(seg_list[k]),
+                pos_list[k][1],
+                ner_list[k][1]
             ))
         # Set special option for non-entity tag: '' vs 'O' in spaCy
         return Tokens(data, self.annotators, opts={'non_ent': ''})
