@@ -4,7 +4,6 @@ from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
 from utils.vector import vectorize
 
-
 # ------------------------------------------------------------------------------
 # Dictionary class for tokens.
 # ------------------------------------------------------------------------------

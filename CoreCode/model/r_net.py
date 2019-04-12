@@ -4,6 +4,9 @@ import torch.nn.functional as F
 import model.layers as layers
 
 class R_Net(nn.Module):
+    """
+    R-Net layers for multilayers sentiment analaysis.
+    """
     RNN_TYPES = {'lstm': nn.LSTM, 'gru': nn.GRU, 'rnn': nn.RNN}
     CELL_TYPES = {'lstm': nn.LSTMCell, 'gru': nn.GRUCell, 'rnn': nn.RNNCell}
     def __init__(self,args, normalize= True):

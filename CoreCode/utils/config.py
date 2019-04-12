@@ -4,7 +4,6 @@ import argparse
 
 logger = logging.getLogger(__name__)
 
-
 home = os.path.expanduser(".")
 DATA_DIR = os.path.join(home,"data","raw_data")
 OUT_DIR = os.path.join(home,"data","data_processed")

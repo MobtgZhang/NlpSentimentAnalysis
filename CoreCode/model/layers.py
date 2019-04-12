@@ -7,7 +7,6 @@ from torch.autograd import Variable
 # Modules
 # ------------------------------------------------------------------------------
 
-
 class StackedBRNN(nn.Module):
     """Stacked Bi-directional RNNs.
 
@@ -159,7 +158,6 @@ class StackedBRNN(nn.Module):
 
 class SelfAttnMatch(nn.Module):
     """Given sequences X and Y, match sequence Y to each element in X.
-
     * o_i = sum(alpha_j * x_j) for i in X
     * alpha_j = softmax(x_j * x_i)
     """
@@ -232,8 +230,10 @@ class Gate(nn.Module):
 
 
 class MatchNetwork(nn.Module):
-    def __init__(self,
-                 doc_attn_hidden_size, hidden_size,
+	"""
+	This model is for multilayers network.
+	"""
+    def __init__(self,doc_attn_hidden_size, hidden_size,
                  first_grained_size,second_grained_size ,class_size,
                  dropout_rate=0,
                  normalize=True):
@@ -286,6 +286,9 @@ class MatchNetwork(nn.Module):
         return score
 
 class FeedForwardNetwork(nn.Module):
+	"""
+	Feed forword network 
+	"""
     def __init__(self, input_size, hidden_size, output_size, dropout_rate=0):
         super(FeedForwardNetwork, self).__init__()
         self.dropout_rate = dropout_rate
@@ -320,10 +323,8 @@ class NonLinearSeqAttn(nn.Module):
         return alpha
 class LinearSeqAttn(nn.Module):
     """Self attention over a sequence:
-
     * o_i = softmax(Wx_i) for x_i in X.
     """
-
     def __init__(self, input_size,hidden_size):
         super(LinearSeqAttn, self).__init__()
         self.att_in = nn.GRU(input_size=input_size,hidden_size=hidden_size,bidirectional=True,batch_first=True)
@@ -340,6 +341,9 @@ class LinearSeqAttn(nn.Module):
         return alpha
 
 class MultiMatch(nn.Module):
+	"""
+	Multi match layers for network.
+	"""
     def __init__(self,in_size,hidden_size,label_size,
                  training= True,
                  dropout_rate=0):

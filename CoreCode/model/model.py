@@ -8,7 +8,6 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import gensim
 
-
 from .m_reader import MnemonicReader
 from .rnn_reader import RnnDocReader
 from .r_net import R_Net

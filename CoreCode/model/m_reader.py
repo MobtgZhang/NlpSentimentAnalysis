@@ -3,8 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import model.layers as layers
 
-
 class MnemonicReader(nn.Module):
+    """
+    MnemonicReader model for multilayers sentiment analaysis.
+    """
     RNN_TYPES = {'lstm': nn.LSTM, 'gru': nn.GRU, 'rnn': nn.RNN}
     CELL_TYPES = {'lstm': nn.LSTMCell, 'gru': nn.GRUCell, 'rnn': nn.RNNCell}
     def __init__(self,args, normalize= True):

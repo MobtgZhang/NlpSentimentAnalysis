@@ -6,7 +6,6 @@ from collections import Counter
 import logging
 logger = logging.getLogger(__name__)
 import gensim
-
 from utils.data import Dictionary
 
 def index_embedding_words(embedding_file):

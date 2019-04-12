@@ -2,7 +2,6 @@ from collections import Counter
 import numpy as np
 import torch
 
-
 def vectorize(ex, model):
     """Torchify a single example."""
     args = model.args

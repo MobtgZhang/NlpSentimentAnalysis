@@ -3,11 +3,9 @@ import pandas as pd
 import codecs
 
 from tqdm import tqdm
-
 from functools import partial
 from multiprocessing import Pool
 from multiprocessing.util import Finalize
-
 import logging
 logging.basicConfig(level = logging.INFO,format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
