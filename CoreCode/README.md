@@ -15,7 +15,7 @@ python3 prepare.py --split training
 ```bash
 python3 prepare.py --split validation
 ```
-[4] training data
+[3] training data
 ```bash
 python3 train.py
 ```
